@@ -17,6 +17,8 @@
 
 >**2023.03.09：** 基于 `whisper API` 实现对微信语音消息的解析和回复，添加配置项 `"speech_recognition":true` 即可启用。(contributed by [wanggang1987](https://github.com/wanggang1987) in [#385](https://github.com/zhayujie/chatgpt-on-wechat/pull/385))
 
+>**2023.03.07：** 采用openai的tiktoken库计算会话的token数量，处理会话超长，需升级tiktoken依赖 (`pip3 install --upgrade tiktoken`)
+
 >**2023.03.02：** 接入[ChatGPT API](https://platform.openai.com/docs/guides/chat) (gpt-3.5-turbo)，默认使用该模型进行对话，需升级openai依赖 (`pip3 install --upgrade openai`)。网络问题参考 [#351](https://github.com/zhayujie/chatgpt-on-wechat/issues/351)
 
 >**2023.02.20：** 增加 [python-wechaty](https://github.com/wechaty/python-wechaty) 作为可选渠道，使用Pad协议相对稳定，但Token收费 (使用参考[#244](https://github.com/zhayujie/chatgpt-on-wechat/pull/244)，contributed by [ZQ7](https://github.com/ZQ7))
