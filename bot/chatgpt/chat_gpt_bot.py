@@ -5,7 +5,7 @@ import threading
 import openai
 
 from bot.bot import Bot
-from config import conf
+from config import conf, load_config
 from common.log import logger
 from common.expired_dict import ExpiredDict
 from common.messages_tokens import num_tokens_from_message
@@ -53,6 +53,9 @@ class ChatGPTBot(Bot):
             elif query == '#清除所有':
                 Session.clear_all_session()
                 return '所有人记忆已清除'
+            elif query == '#更新配置':
+                load_config()
+                return '配置已更新'
 
             session = Session.build_session_query(query, session_id)
             logger.debug("[OPEN_AI] session query=%s", session)
