@@ -46,7 +46,7 @@ class ChatGPTBot(Bot):
         """
         if not context or not context.get('type') or context.get('type') == 'TEXT':
             logger.info("[OPEN_AI] query=%s", query)
-            session_id = context['session_id']
+            session_id = context.get('session_id') or context.get('from_user_id')
             if query == '#清除记忆':
                 Session.clear_session(session_id)
                 return '记忆已清除'

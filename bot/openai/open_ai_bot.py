@@ -4,7 +4,7 @@ import time
 import openai
 
 from bot.bot import Bot
-from config import conf
+from config import conf, load_config
 from common.log import logger
 
 
@@ -35,13 +35,17 @@ class OpenAIBot(Bot):
         """
         if not context or not context.get('type') or context.get('type') == 'TEXT':
             logger.info("[OPEN_AI] query= %s", query)
-            from_user_id = context['from_user_id']
+            from_user_id = context.get(
+                'from_user_id') or context.get('session_id')
             if query == '#清除记忆':
                 Session.clear_session(from_user_id)
                 return '记忆已清除'
             elif query == '#清除所有':
                 Session.clear_all_session()
                 return '所有人记忆已清除'
+            elif query == '#更新配置':
+                load_config()
+                return '配置已更新'
 
             new_query = Session.build_session_query(query, from_user_id)
             logger.debug("[OPEN_AI] session query=%s", new_query)
