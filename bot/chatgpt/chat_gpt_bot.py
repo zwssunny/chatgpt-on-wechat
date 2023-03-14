@@ -9,6 +9,7 @@ from config import conf, load_config
 from common.log import logger
 from common.expired_dict import ExpiredDict
 from common.messages_tokens import num_tokens_from_message
+from bot.baidu.baidu_unit_bot import BaiduUnitBot
 
 
 if conf().get('expires_in_seconds'):
@@ -32,6 +33,9 @@ class ChatGPTBot(Bot):
         proxy = conf().get('proxy')
         if proxy:
             openai.proxy = proxy
+        baiduconfig = conf().get('baiduunit')
+        if baiduconfig:
+            self.baiduUnitBot = BaiduUnitBot()
 
     def reply(self, query, context=None):
         """
@@ -46,7 +50,8 @@ class ChatGPTBot(Bot):
         """
         if not context or not context.get('type') or context.get('type') == 'TEXT':
             logger.info("[OPEN_AI] query=%s", query)
-            session_id = context.get('session_id') or context.get('from_user_id')
+            session_id = context.get(
+                'session_id') or context.get('from_user_id')
             if query == '#清除记忆':
                 Session.clear_session(session_id)
                 return '记忆已清除'
@@ -60,10 +65,20 @@ class ChatGPTBot(Bot):
             session = Session.build_session_query(query, session_id)
             logger.debug("[OPEN_AI] session query=%s", session)
 
-            # if context.get('stream'):
-            #     # reply in stream
-            #     return self.reply_text_stream(query, new_query, session_id)
+            # 先调用百度机器人，如果能返回可以识别的意图，则返回结果，否则继续执行openai chat
+            if self.baiduUnitBot:
+                parsed = self.baiduUnitBot.getUnit2(query)
+                intent = self.baiduUnitBot.getIntent(parsed)
+                if intent:
+                    logger.info("Baidu_AI Intent= %s", intent)
+                    replytext = self.baiduUnitBot.getSay(parsed)
+                    if replytext:
+                        logger.info("Baidu_AI replytext= %s", replytext)
+                        threading.Thread(target=Session.save_session, args=(
+                            replytext, session_id, 0)).start()
+                        return replytext
 
+            # 找不到意图了，继续执行
             reply_content = self.reply_text(session, session_id, 0)
             logger.debug("[OPEN_AI] new_query=%s, user=%s, reply_cont=%s",
                          session, session_id, reply_content["content"])
