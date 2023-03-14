@@ -14,6 +14,7 @@
 
 
 # 更新日志
+>**2023.03.14：** 利用百度UNIT云端机器人技能，预处理微信消息，如果命中意图则返回结果，然后由OPENAI chat托底，需要增加配置参数（baiduunit:{service_id:,api_key:,secret_key:,},可以到https://console.bce.baidu.com/ai平台申请聊天机器人和 API调用参数）
 
 >**2023.03.09：** 基于 `whisper API` 实现对微信语音消息的解析和回复，添加配置项 `"speech_recognition":true` 即可启用，使用参考 [#415](https://github.com/zhayujie/chatgpt-on-wechat/issues/415)(contributed by [wanggang1987](https://github.com/wanggang1987) in [#385](https://github.com/zhayujie/chatgpt-on-wechat/pull/385))
 

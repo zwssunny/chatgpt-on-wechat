@@ -17,8 +17,8 @@
     "secret_key": ""
   },
   "baiduyuyin": {
-    "baidu_app_id": "",
-    "baidu_api_key": "",
-    "baidu_secret_key": ""
+    "app_id": "",
+    "api_key": "",
+    "secret_key": ""
   }
 }

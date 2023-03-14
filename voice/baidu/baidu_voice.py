@@ -32,9 +32,9 @@ from config import conf
 class BaiduVoice(Voice):
 
     def __init__(self):
-        app_id = conf()["baiduyuyin"].get('baidu_app_id')
-        api_key = conf()["baiduyuyin"].get('baidu_api_key')
-        secert_key = conf()["baiduyuyin"].get('baidu_secret_key')
+        app_id = conf()["baiduyuyin"].get('app_id')
+        api_key = conf()["baiduyuyin"].get('api_key')
+        secert_key = conf()["baiduyuyin"].get('secret_key')
         self.client = AipSpeech(app_id, api_key, secert_key)
         self.dev_pid = 1936
 
