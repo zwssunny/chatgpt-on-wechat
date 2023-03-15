@@ -36,6 +36,12 @@ def handler_single_voice(msg):
     return None
 
 
+@itchat.msg_register(VOICE, isGroupChat=True)
+def handler_group_voice(msg):
+    WechatChannel().handle_group_voice(msg)
+    return None
+
+
 class WechatChannel(Channel):
     def __init__(self):
         pass
@@ -64,6 +70,40 @@ class WechatChannel(Channel):
                 self._do_send_voice(query, from_user_id)
             else:
                 self._do_send_text(query, from_user_id)
+
+    def handle_group_voice(self, msg):
+        if conf().get('speech_recognition') != True:
+            return
+        logger.debug("[WX]receive group voice msg: " + msg['FileName'])
+        thread_pool.submit(self._do_handle_group_voice, msg)
+
+    def _do_handle_group_voice(self, msg):
+        group_name = msg['User'].get('NickName', None)
+        group_id = msg['User'].get('UserName', None)
+        if not group_name:
+            return ""
+        config = conf()
+        if ('ALL_GROUP' in config.get('group_name_white_list')
+            or group_name in config.get('group_name_white_list')
+                or self.check_contain(group_name, config.get('group_name_keyword_white_list'))):
+            file_name = TmpDir().path() + msg['FileName']
+            msg.download(file_name)
+            content = super().build_voice_to_text(file_name)
+            # 找到唤醒词
+            wakeup_match_prefix = self.check_prefix(
+                content, config.get('group_chat_prefix'))
+            if wakeup_match_prefix:
+                content = content.split(wakeup_match_prefix, 1)[1].strip()
+                img_match_prefix = self.check_prefix(
+                    content, conf().get('image_create_prefix'))
+                if img_match_prefix:
+                    content = content.split(img_match_prefix, 1)[1].strip()
+                    self._do_send_img(content, group_id)
+                else:
+                    if conf().get('voice_reply_voice'):
+                        self._do_send_voice(content, group_id)
+                    else:
+                        self._do_send_group(content, msg)
 
     def handle_text(self, msg):
         logger.debug("[WX]receive text msg: " +

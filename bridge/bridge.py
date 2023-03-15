@@ -10,8 +10,8 @@ class Bridge(object):
         return bot_factory.create_bot("chatGPT").reply(query, context)
 
     def fetch_voice_to_text(self, voiceFile):
-        # return voice_factory.create_voice("baidu").voiceToText(voiceFile)
-        return voice_factory.create_voice("openai").voiceToText(voiceFile)
+        return voice_factory.create_voice("baidu").voiceToText(voiceFile)
+        # return voice_factory.create_voice("openai").voiceToText(voiceFile)
 
     def fetch_text_to_voice(self, text):
         return voice_factory.create_voice("baidu").textToVoice(text)

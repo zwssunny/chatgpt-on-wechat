@@ -3,7 +3,7 @@
   "proxy": "",
   "single_chat_prefix": ["bot", "@bot"],
   "single_chat_reply_prefix": "[bot] ",
-  "group_chat_prefix": ["@bot"],
+  "group_chat_prefix": ["@bot","小宝同学","小智同学"], //声音用到的唤醒词
   "group_name_white_list": ["ChatGPT测试群", "ChatGPT测试群2"],
   "image_create_prefix": ["画", "看", "找"],
   "conversation_max_tokens": 1000,
