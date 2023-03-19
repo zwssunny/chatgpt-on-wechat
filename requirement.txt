@@ -3,3 +3,11 @@ openai
 wechaty
 tiktoken
 whisper
+baidu-aip 
+chardet
+ffmpy
+pydub
+pilk
+pysilk
+pysilk-mod
+wave

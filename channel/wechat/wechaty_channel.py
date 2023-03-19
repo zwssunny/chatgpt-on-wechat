@@ -4,19 +4,18 @@
 wechaty channel
 Python Wechaty - https://github.com/wechaty/python-wechaty
 """
-import io
 import os
-import json
 import time
 import asyncio
-import requests
 from typing import Optional, Union
 from wechaty_puppet import MessageType, FileBox, ScanStatus  # type: ignore
 from wechaty import Wechaty, Contact
 from wechaty.user import Message, Room, MiniProgram, UrlLink
 from channel.channel import Channel
 from common.log import logger
+from common.tmp_dir import TmpDir
 from config import conf
+from voice.audio_convert import silk_to_wav, mp3_to_wav, pcm_to_silk
 
 
 class WechatyChannel(Channel):
@@ -46,7 +45,8 @@ class WechatyChannel(Channel):
     async def on_scan(self, status: ScanStatus, qr_code: Optional[str] = None,
                       data: Optional[str] = None):
         contact = self.Contact.load(self.contact_id)
-        logger.info('[WX] scan user={}, scan status={}, scan qr_code={}'.format(contact, status.name, qr_code))
+        logger.info('[WX] scan user={}, scan status={}, scan qr_code={}'.format(
+            contact, status.name, qr_code))
         # print(f'user <{contact}> scan status: {status.name} , 'f'qr_code: {qr_code}')
 
     async def on_message(self, msg: Message):
@@ -61,10 +61,11 @@ class WechatyChannel(Channel):
         # other_user_id = msg['User']['UserName']  # 对手方id
         content = msg.text()
         mention_content = await msg.mention_text()  # 返回过滤掉@name后的消息
-        match_prefix = self.check_prefix(content, conf().get('single_chat_prefix'))
         conversation: Union[Room, Contact] = from_contact if room is None else room
-
+        
         if room is None and msg.type() == MessageType.MESSAGE_TYPE_TEXT:
+            match_prefix = self.check_prefix(
+                content, conf().get('single_chat_prefix'))            
             if not msg.is_self() and match_prefix is not None:
                 # 好友向自己发送消息
                 if match_prefix != '':
@@ -72,7 +73,8 @@ class WechatyChannel(Channel):
                     if len(str_list) == 2:
                         content = str_list[1].strip()
 
-                img_match_prefix = self.check_prefix(content, conf().get('image_create_prefix'))
+                img_match_prefix = self.check_prefix(
+                    content, conf().get('image_create_prefix'))
                 if img_match_prefix:
                     content = content.split(img_match_prefix, 1)[1].strip()
                     await self._do_send_img(content, from_user_id)
@@ -83,12 +85,44 @@ class WechatyChannel(Channel):
                 str_list = content.split(match_prefix, 1)
                 if len(str_list) == 2:
                     content = str_list[1].strip()
-                img_match_prefix = self.check_prefix(content, conf().get('image_create_prefix'))
+                img_match_prefix = self.check_prefix(
+                    content, conf().get('image_create_prefix'))
                 if img_match_prefix:
                     content = content.split(img_match_prefix, 1)[1].strip()
                     await self._do_send_img(content, to_user_id)
                 else:
                     await self._do_send(content, to_user_id)
+        elif room is None and msg.type() == MessageType.MESSAGE_TYPE_AUDIO:
+            if not msg.is_self():  # 接收语音消息
+                # 下载语音文件
+                voice_file = await msg.to_file_box()
+                silk_file = TmpDir().path() + voice_file.name
+                await voice_file.to_file(silk_file)
+                logger.info("[WX]receive voice file: " + silk_file)
+                # 将文件转成wav格式音频
+                wav_file = os.path.splitext(silk_file)[0] + '.wav'
+                silk_to_wav(silk_file, wav_file)
+                # 语音识别为文本
+                query = super().build_voice_to_text(wav_file)
+                # 删除临时文件
+                os.remove(wav_file)
+                os.remove(silk_file)
+                # 交验关键字
+                match_prefix = self.check_prefix(
+                    query, conf().get('single_chat_prefix'))
+                if match_prefix is not None:
+                    if match_prefix != '':
+                        str_list = query.split(match_prefix, 1)
+                        if len(str_list) == 2:
+                            query = str_list[1].strip()
+                    # 返回消息
+                    if conf().get('voice_reply_voice'):
+                        await self._do_send_voice(query, from_user_id)
+                    else:
+                        await self._do_send(query, from_user_id)
+                else:
+                    logger.info("[WX]receive voice check prefix: " + 'False')
+
         elif room and msg.type() == MessageType.MESSAGE_TYPE_TEXT:
             # 群组&文本消息
             room_id = room.room_id
@@ -99,17 +133,56 @@ class WechatyChannel(Channel):
             content = mention_content
             config = conf()
             match_prefix = (is_at and not config.get("group_at_off", False)) \
-                           or self.check_prefix(content, config.get('group_chat_prefix')) \
-                           or self.check_contain(content, config.get('group_chat_keyword'))
+                or self.check_prefix(content, config.get('group_chat_prefix')) \
+                or self.check_contain(content, config.get('group_chat_keyword'))
             if ('ALL_GROUP' in config.get('group_name_white_list') or room_name in config.get(
                     'group_name_white_list') or self.check_contain(room_name, config.get(
-                'group_name_keyword_white_list'))) and match_prefix:
-                img_match_prefix = self.check_prefix(content, conf().get('image_create_prefix'))
+                        'group_name_keyword_white_list'))) and match_prefix:
+                img_match_prefix = self.check_prefix(
+                    content, conf().get('image_create_prefix'))
                 if img_match_prefix:
                     content = content.split(img_match_prefix, 1)[1].strip()
                     await self._do_send_group_img(content, room_id)
                 else:
                     await self._do_send_group(content, room_id, room_name, from_user_id, from_user_name)
+        elif room and msg.type() == MessageType.MESSAGE_TYPE_AUDIO:
+            # 群组&文本消息
+            room_id = room.room_id
+            room_name = await room.topic()
+            from_user_id = from_contact.contact_id
+            from_user_name = from_contact.name
+            config = conf()
+            if ('ALL_GROUP' in config.get('group_name_white_list') or room_name in config.get(
+                    'group_name_white_list') or self.check_contain(room_name, config.get(
+                        'group_name_keyword_white_list'))):
+               # 下载语音文件
+                voice_file = await msg.to_file_box()
+                silk_file = TmpDir().path() + voice_file.name
+                await voice_file.to_file(silk_file)
+                logger.info("[WX]receive voice file: " + silk_file)
+                # 将文件转成wav格式音频
+                wav_file = os.path.splitext(silk_file)[0] + '.wav'
+                silk_to_wav(silk_file, wav_file)
+                # 语音识别为文本
+                content = super().build_voice_to_text(wav_file)
+                # 删除临时文件
+                os.remove(wav_file)
+                os.remove(silk_file)
+                # 找到唤醒词
+                wakeup_match_prefix = self.check_prefix(
+                    content, config.get('group_chat_prefix'))
+                if wakeup_match_prefix:
+                    content = content.split(wakeup_match_prefix, 1)[1].strip()
+                    img_match_prefix = self.check_prefix(
+                        content, conf().get('image_create_prefix'))
+                    if img_match_prefix:
+                        content = content.split(img_match_prefix, 1)[1].strip()
+                        await self._do_send_group_img(content, room_id)
+                    else:
+                        if conf().get('voice_reply_voice'):
+                            await self._do_send_voice(content, room_id)
+                        else:
+                            await self._do_send_group(content, room_id, room_name, from_user_id, from_user_name)
 
     async def send(self, message: Union[str, Message, FileBox, Contact, UrlLink, MiniProgram], receiver):
         logger.info('[WX] sendMsg={}, receiver={}'.format(message, receiver))
@@ -132,6 +205,30 @@ class WechatyChannel(Channel):
             reply_text = super().build_reply_content(query, context)
             if reply_text:
                 await self.send(conf().get("single_chat_reply_prefix") + reply_text, reply_user_id)
+        except Exception as e:
+            logger.exception(e)
+
+    async def _do_send_voice(self, query, reply_user_id):
+        try:
+            if not query:
+                return
+            context = dict()
+            context['session_id'] = reply_user_id
+            reply_text = super().build_reply_content(query, context)
+            if reply_text:
+                # 转换 mp3 文件为 silk 格式
+                mp3_file = super().build_text_to_voice(reply_text)
+                silk_file = os.path.splitext(mp3_file)[0] + '.silk'
+                wav_file = os.path.splitext(mp3_file)[0] + '.wav'
+                mp3_to_wav(mp3_file, wav_file)
+                pcm_to_silk(wav_file, silk_file)
+                t = int(time.time())
+                file_box = FileBox.from_file(silk_file, name=str(t) + '.silk')
+                await self.send(file_box, reply_user_id)
+                # 清除缓存文件
+                os.remove(mp3_file)
+                os.remove(wav_file)
+                os.remove(silk_file)
         except Exception as e:
             logger.exception(e)
 
@@ -164,8 +261,8 @@ class WechatyChannel(Channel):
             return
         context = dict()
         group_chat_in_one_session = conf().get('group_chat_in_one_session', [])
-        if ('ALL_GROUP' in group_chat_in_one_session or \
-                group_name in group_chat_in_one_session or \
+        if ('ALL_GROUP' in group_chat_in_one_session or
+                group_name in group_chat_in_one_session or
                 self.check_contain(group_name, group_chat_in_one_session)):
             context['session_id'] = str(group_id)
         else:

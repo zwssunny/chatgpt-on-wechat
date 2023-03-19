@@ -11,7 +11,7 @@ from voice.voice import Voice
 
 class OpenaiVoice(Voice):
     def __init__(self):
-        openai.api_key = conf().get('open_ai_api_key')
+        openai.api_key = conf()["openai"].get('api_key')
 
     def voiceToText(self, voice_file):
         logger.debug(

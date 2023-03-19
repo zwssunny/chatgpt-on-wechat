@@ -1,6 +1,6 @@
 # encoding:utf-8
 
-import config
+from config import conf, load_config
 from channel import channel_factory
 from common.log import logger
 
@@ -8,10 +8,11 @@ from common.log import logger
 if __name__ == '__main__':
     try:
         # load config
-        config.load_config()
+        load_config()
 
         # create channel
-        channel = channel_factory.create_channel("wx")
+        channel_type = conf().get("channel_type")
+        channel = channel_factory.create_channel(channel_type)
 
         # startup channel
         channel.startup()

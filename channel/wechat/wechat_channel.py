@@ -4,6 +4,9 @@
 wechat channel
 """
 
+import os
+import io
+import requests
 import itchat
 import json
 from itchat.content import *
@@ -12,8 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from common.log import logger
 from common.tmp_dir import TmpDir
 from config import conf
-import requests
-import io
+from voice.audio_convert import mp3_to_wav
 
 thread_pool = ThreadPoolExecutor(max_workers=8)
 
@@ -63,13 +65,21 @@ class WechatChannel(Channel):
         from_user_id = msg['FromUserName']
         other_user_id = msg['User']['UserName']
         if from_user_id == other_user_id:
-            file_name = TmpDir().path() + msg['FileName']
-            msg.download(file_name)
-            query = super().build_voice_to_text(file_name)
+            mp3_path = TmpDir().path() + msg['FileName']
+            msg.download(mp3_path)
+            #mp3转wav
+            wav_path = os.path.splitext(mp3_path)[0] + '.wav'
+            mp3_to_wav(mp3_path=mp3_path, wav_path=wav_path)
+            #语音识别
+            content = super().build_voice_to_text(wav_path)
+            #删除临时文件
+            os.remove(wav_path)
+            os.remove(mp3_path)
+            
             if conf().get('voice_reply_voice'):
-                self._do_send_voice(query, from_user_id)
+                self._do_send_voice(content, from_user_id)
             else:
-                self._do_send_text(query, from_user_id)
+                self._do_send_text(content, from_user_id)
 
     def handle_group_voice(self, msg):
         if conf().get('speech_recognition') != True:
@@ -86,9 +96,17 @@ class WechatChannel(Channel):
         if ('ALL_GROUP' in config.get('group_name_white_list')
             or group_name in config.get('group_name_white_list')
                 or self.check_contain(group_name, config.get('group_name_keyword_white_list'))):
-            file_name = TmpDir().path() + msg['FileName']
-            msg.download(file_name)
-            content = super().build_voice_to_text(file_name)
+            mp3_path = TmpDir().path() + msg['FileName']
+            msg.download(mp3_path)
+            #mp3转wav
+            wav_path = os.path.splitext(mp3_path)[0] + '.wav'
+            mp3_to_wav(mp3_path=mp3_path, wav_path=wav_path)
+            #语音识别
+            content = super().build_voice_to_text(wav_path)
+            #删除临时文件
+            os.remove(wav_path)
+            os.remove(mp3_path)
+            
             # 找到唤醒词
             wakeup_match_prefix = self.check_prefix(
                 content, config.get('group_chat_prefix'))

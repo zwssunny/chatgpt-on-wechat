@@ -21,7 +21,10 @@ class OpenAIBot(Bot):
     """
 
     def __init__(self):
-        openai.api_key = conf().get('open_ai_api_key')
+        openai.api_key = conf()["openai"].get('api_key')
+        proxy = conf()["openai"].get('proxy')
+        if proxy:
+            openai.proxy = proxy
 
     def reply(self, query, context=None):
         """acquire reply content

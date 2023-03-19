@@ -2,16 +2,14 @@
 """
 baidu voice service
 """
-import os
 import time
-import wave
 from aip import AipSpeech
 from common.log import logger
 from common.tmp_dir import TmpDir
 from voice.voice import Voice
 from config import conf
 from common.tmp_dir import TmpDir
-from pydub import AudioSegment
+from voice.audio_convert import get_pcm_from_wav
 
 """
     百度的语音识别API.
@@ -46,8 +44,7 @@ class BaiduVoice(Voice):
     def voiceToText(self, voice_file):
         # 识别本地文件
         logger.debug('[Baidu] voice file name={}'.format(voice_file))
-
-        pcm = self.mp3_to_pcm(voice_file)
+        pcm = get_pcm_from_wav(voice_file)
         res = self.client.asr(pcm, "pcm", 16000, {"dev_pid": self.dev_pid})
         if res["err_no"] == 0:
             logger.info("百度语音识别到了：{}".format(res["result"]))
@@ -72,30 +69,3 @@ class BaiduVoice(Voice):
         else:
             logger.error('[Baidu] textToVoice error={}'.format(result))
             return None
-
-    def get_pcm_from_wav(self, wav_path):
-        """
-        从 wav 文件中读取 pcm
-
-        :param wav_path: wav 文件路径
-        :returns: pcm 数据
-        """
-        wav = wave.open(wav_path, "rb")
-        return wav.readframes(wav.getnframes())
-
-    def mp3_to_pcm(self, mp3_path):
-        """把mp3格式转成pcm文件
-
-        Args:
-            mp3_path (string): mp3文件名称
-
-        Returns:
-            pcm: pcm 数据
-        """
-        save_name = TmpDir().path() + str(int(time.time())) + '.pcm'
-        song = AudioSegment.from_mp3(mp3_path)
-        song.export(save_name, format="wav")
-        
-        data = self.get_pcm_from_wav(save_name)
-        os.remove(save_name)
-        return data

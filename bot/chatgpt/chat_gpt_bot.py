@@ -29,8 +29,8 @@ class ChatGPTBot(Bot):
     """
 
     def __init__(self):
-        openai.api_key = conf().get('open_ai_api_key')
-        proxy = conf().get('proxy')
+        openai.api_key = conf()["openai"].get('api_key')
+        proxy = conf()["openai"].get('proxy')
         if proxy:
             openai.proxy = proxy
         baiduconfig = conf().get('baiduunit')
@@ -101,7 +101,7 @@ class ChatGPTBot(Bot):
         '''
         try:
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",  # 对话模型的名称
+                model="gpt-3.5-turbo",  # 对话模型的名称"gpt-3.5-turbo",  # 对话模型的名称
                 messages=query,
                 temperature=0.9,  # 值在[0,1]之间，越大表示回复越具有不确定性
                 # max_tokens=4096,  # 回复最大的字符数

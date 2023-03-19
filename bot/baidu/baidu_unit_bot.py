@@ -29,7 +29,7 @@ class BaiduUnitBot(Bot):
         self.access_token = self.get_token()
 
     def reply(self, query, context=None):
-        # token = self.get_token()
+        # token = self.access_token
         # url = 'https://aip.baidubce.com/rpc/2.0/unit/service/v3/chat?access_token=' + token
         # post_data = "{\"version\":\"3.0\",\"service_id\":\"S73177\",\"session_id\":\"\",\"log_id\":\"7758521\",\"skill_ids\":[\"1221886\"],\"request\":{\"terminal_id\":\"88888\",\"query\":\"" + query + "\", \"hyper_params\": {\"chat_custom_bot_profile\": 1}}}"
         # print(post_data)
@@ -41,6 +41,12 @@ class BaiduUnitBot(Bot):
         return self.getSay(query)
 
     def get_token(self):
+        """获取访问百度UUNIT 的access_token
+        #param api_key: UNIT apk_key
+        #param secret_key: UNIT secret_key
+        Returns:
+            string: access_token
+        """        
         api_key = conf()["baiduunit"].get("api_key")
         secret_key = conf()["baiduunit"].get("secret_key")
         url = "https://aip.baidubce.com/oauth/2.0/token?client_id={}&client_secret={}&grant_type=client_credentials".format(
@@ -59,11 +65,7 @@ class BaiduUnitBot(Bot):
     def getUnit(self, query):
         """
         NLU 解析version 3.0
-
         :param query: 用户的指令字符串
-        :param service_id: UNIT 的 service_id
-        :param api_key: UNIT apk_key
-        :param secret_key: UNIT secret_key
         :returns: UNIT 解析结果。如果解析失败，返回 None
         """
         service_id = conf()["baiduunit"].get("service_id")
@@ -93,11 +95,9 @@ class BaiduUnitBot(Bot):
         NLU 解析 version 2.0
 
         :param query: 用户的指令字符串
-        :param service_id: UNIT 的 service_id
-        :param api_key: UNIT apk_key
-        :param secret_key: UNIT secret_key
         :returns: UNIT 解析结果。如果解析失败，返回 None
         """
+        service_id = conf()["baiduunit"].get("service_id")
         # access_token = self.get_token()
         url = (
             "https://aip.baidubce.com/rpc/2.0/unit/service/chat?access_token="
@@ -107,7 +107,7 @@ class BaiduUnitBot(Bot):
         body = {
             "log_id": str(uuid.uuid1()),
             "version": "2.0",
-            "service_id": "s83689",
+            "service_id": service_id,
             "session_id": str(uuid.uuid1()),
             "request": request,
         }

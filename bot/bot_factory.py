@@ -1,5 +1,5 @@
 """
-channel factory
+bot factory
 """
 
 

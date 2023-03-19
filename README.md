@@ -96,17 +96,38 @@ cp config-template.json config.json
 
 ```bash
 # config.json文件内容示例
-{ 
-  "open_ai_api_key": "YOUR API KEY",                          # 填入上面创建的 OpenAI API KEY
-  "proxy": "127.0.0.1:7890",                                  # 代理客户端的ip和端口
-  "single_chat_prefix": ["bot", "@bot"],                      # 私聊时文本需要包含该前缀才能触发机器人回复
-  "single_chat_reply_prefix": "[bot] ",                       # 私聊时自动回复的前缀，用于区分真人
-  "group_chat_prefix": ["@bot"],                              # 群聊时包含该前缀则会触发机器人回复
-  "group_name_white_list": ["ChatGPT测试群", "ChatGPT测试群2"], # 开启自动回复的群名称列表
-  "image_create_prefix": ["画", "看", "找"],                   # 开启图片回复的前缀
-  "conversation_max_tokens": 1000,                            # 支持上下文记忆的最多字符数
-  "character_desc": "你是ChatGPT, 一个由OpenAI训练的大型语言模型, 你旨在回答并解决人们的任何问题，并且可以使用多种语言与人交流。"  # 人格描述
+{
+  "single_chat_prefix": ["bot", "@bot"], // 私聊时文本需要包含该前缀才能触发机器人回复
+  "single_chat_reply_prefix": "[bot] ", // 私聊时自动回复的前缀，用于区分真人
+  "group_chat_prefix": ["@bot","小宝同学","小智同学"], // 群聊时包含该前缀则会触发机器人回复，后面中文声音用到的唤醒词
+  "group_name_white_list": ["ChatGPT测试群", "ChatGPT测试群2"], // 开启自动回复的群名称列表
+  "image_create_prefix": ["画", "看", "找"],  // 开启图片回复的前缀
+  "conversation_max_tokens": 1000,  // 支持上下文记忆的最多字符数
+  "speech_recognition": false,  //是否开始声音识别，会用到下面参数“asr_engine”
+  "voice_reply_voice": false,   //是否开始声音回复，会用到下面参数“tts_engine”
+  "character_desc": "你是ChatGPT, 一个由OpenAI训练的大型语言模型, 你旨在回答并解决人们的任何问题，并且可以使用多种语言与人交流。",
+  "expires_in_seconds": 3600,  //会话上下文过期时间，单位秒，到时自动清理
+  "wechaty_puppet_service_token": "WECHATY PUPPET SERVICE TOKEN", //如果channel_type为‘wxy’,[python-wechaty](https://github.com/wechaty/python-wechaty) 
+  "openai": {  //openai 机器人，画画或智语音识别
+    "api_key": "YOUR API KEY", //填入上面创建的 OpenAI API KEY
+    "proxy": "127.0.0.1:7890"                // 如果需要设置，代理客户端的ip和端口
+  },
+  "baiduunit": { //百度机器人,https://console.bce.baidu.com/ai平台申请
+    "service_id": "s...",  // "机器人ID"
+    "api_key": "",
+    "secret_key": ""
+  },
+  "baiduyuyin": {  //百度语音，合成或者识别
+    "app_id": "",
+    "api_key": "",
+    "secret_key": ""
+  },
+  "bot_type": "chatGPT", //机器人类型：'openai','chatGPT','baidu'
+  "channel_type": "wx",  //频道：'wx','wxy','terminal'
+  "tts_engine": "baidu", //声音合成：'baidu','google'
+  "asr_engine": "openai" //声音识别：'baidu','openai','google'
 }
+
 ```
 **配置说明：**
 
