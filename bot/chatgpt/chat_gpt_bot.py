@@ -8,15 +8,20 @@ from bot.bot import Bot
 from config import conf, load_config
 from common.log import logger
 from common.expired_dict import ExpiredDict
-from common.messages_tokens import num_tokens_from_message
+from common.messages_tokens import MessagesTokens
 from bot.baidu.baidu_unit_bot import BaiduUnitBot
 
-
+#会话内容过期设置
 if conf().get('expires_in_seconds'):
     all_sessions = ExpiredDict(conf().get('expires_in_seconds'))
 else:
     all_sessions = dict()
 
+# OpenAI model
+model_name = conf()["openai"].get('model') or "gpt-3.5-turbo"
+
+# 计算消息token解码器
+messagesTokens = MessagesTokens(model_name)
 # OpenAI对话模型API (可用)
 
 
@@ -74,8 +79,7 @@ class ChatGPTBot(Bot):
                     replytext = self.baiduUnitBot.getSay(parsed)
                     if replytext:
                         logger.info("Baidu_AI replytext= %s", replytext)
-                        threading.Thread(target=Session.save_session, args=(
-                            replytext, session_id, 0)).start()
+                        Session.save_session(replytext, session_id, 0)
                         return replytext
 
             # 找不到意图了，继续执行
@@ -83,9 +87,10 @@ class ChatGPTBot(Bot):
             logger.debug("[OPEN_AI] new_query=%s, user=%s, reply_cont=%s",
                          session, session_id, reply_content["content"])
             if reply_content["completion_tokens"] > 0:
-                threading.Thread(target=Session.save_session, args=(
-                    reply_content["content"], session_id, reply_content["total_tokens"])).start()
-                # Session.save_session(reply_content["content"], session_id, reply_content["total_tokens"])
+                # threading.Thread(target=Session.save_session, args=(
+                #     reply_content["content"], session_id, reply_content["total_tokens"])).start()
+                Session.save_session(
+                    reply_content["content"], session_id, reply_content["total_tokens"])
             return reply_content["content"]
 
         elif context.get('type', None) == 'IMAGE_CREATE':
@@ -101,7 +106,7 @@ class ChatGPTBot(Bot):
         '''
         try:
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",  # 对话模型的名称"gpt-3.5-turbo",  # 对话模型的名称
+                model=model_name,  # 对话模型的名称"gpt-3.5-turbo",  # 对话模型的名称
                 messages=query,
                 temperature=0.9,  # 值在[0,1]之间，越大表示回复越具有不确定性
                 # max_tokens=4096,  # 回复最大的字符数
@@ -183,6 +188,7 @@ class Session(object):
     Returns:
         Session: 所有用户会话管理对象
     """
+
     @staticmethod
     def build_session_query(query, session_id):
         '''
@@ -208,7 +214,7 @@ class Session(object):
         return session
 
     @staticmethod
-    def save_session(answer, session_id, total_tokens):
+    async def save_session(answer, session_id, total_tokens):
         """
         保存某用户的会话对
 
@@ -247,9 +253,9 @@ class Session(object):
         while dec_tokens > max_tokens:
             if len(session) > 3:
                 gpt_item = session.pop(1)
-                item_tokens = num_tokens_from_message(gpt_item)
+                item_tokens = messagesTokens.num_tokens_from_message(gpt_item)
                 gpt_item = session.pop(1)
-                item_tokens += num_tokens_from_message(gpt_item)
+                item_tokens += messagesTokens.num_tokens_from_message(gpt_item)
                 dec_tokens = dec_tokens - item_tokens
             else:
                 break

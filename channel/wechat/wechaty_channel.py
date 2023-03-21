@@ -15,7 +15,7 @@ from channel.channel import Channel
 from common.log import logger
 from common.tmp_dir import TmpDir
 from config import conf
-from voice.audio_convert import silk_to_wav, mp3_to_wav, pcm_to_silk
+from voice.audio_convert import silk_to_wav, mp3_to_silk
 
 
 class WechatyChannel(Channel):
@@ -34,7 +34,7 @@ class WechatyChannel(Channel):
         global bot
         bot = Wechaty()
 
-        bot.on('scan', self.on_scan)
+        # bot.on('scan', self.on_scan)
         bot.on('login', self.on_login)
         bot.on('message', self.on_message)
         await bot.start()
@@ -44,9 +44,10 @@ class WechatyChannel(Channel):
 
     async def on_scan(self, status: ScanStatus, qr_code: Optional[str] = None,
                       data: Optional[str] = None):
-        contact = self.Contact.load(self.contact_id)
-        logger.info('[WX] scan user={}, scan status={}, scan qr_code={}'.format(
-            contact, status.name, qr_code))
+        pass
+        # contact = self.Contact.load(self.contact_id)
+        # logger.info('[WX] scan user={}, scan status={}, scan qr_code={}'.format(
+        #     contact, status.name, qr_code))
         # print(f'user <{contact}> scan status: {status.name} , 'f'qr_code: {qr_code}')
 
     async def on_message(self, msg: Message):
@@ -61,11 +62,11 @@ class WechatyChannel(Channel):
         # other_user_id = msg['User']['UserName']  # 对手方id
         content = msg.text()
         mention_content = await msg.mention_text()  # 返回过滤掉@name后的消息
-        conversation: Union[Room, Contact] = from_contact if room is None else room
-        
+        # conversation: Union[Room, Contact] = from_contact if room is None else room
+
         if room is None and msg.type() == MessageType.MESSAGE_TYPE_TEXT:
             match_prefix = self.check_prefix(
-                content, conf().get('single_chat_prefix'))            
+                content, conf().get('single_chat_prefix'))
             if not msg.is_self() and match_prefix is not None:
                 # 好友向自己发送消息
                 if match_prefix != '':
@@ -107,21 +108,11 @@ class WechatyChannel(Channel):
                 # 删除临时文件
                 os.remove(wav_file)
                 os.remove(silk_file)
-                # 交验关键字
-                match_prefix = self.check_prefix(
-                    query, conf().get('single_chat_prefix'))
-                if match_prefix is not None:
-                    if match_prefix != '':
-                        str_list = query.split(match_prefix, 1)
-                        if len(str_list) == 2:
-                            query = str_list[1].strip()
-                    # 返回消息
-                    if conf().get('voice_reply_voice'):
-                        await self._do_send_voice(query, from_user_id)
-                    else:
-                        await self._do_send(query, from_user_id)
+                # 返回消息
+                if conf().get('voice_reply_voice'):
+                    await self._do_send_voice(query, from_user_id)
                 else:
-                    logger.info("[WX]receive voice check prefix: " + 'False')
+                    await self._do_send(query, from_user_id)
 
         elif room and msg.type() == MessageType.MESSAGE_TYPE_TEXT:
             # 群组&文本消息
@@ -155,7 +146,7 @@ class WechatyChannel(Channel):
             if ('ALL_GROUP' in config.get('group_name_white_list') or room_name in config.get(
                     'group_name_white_list') or self.check_contain(room_name, config.get(
                         'group_name_keyword_white_list'))):
-               # 下载语音文件
+                # 下载语音文件
                 voice_file = await msg.to_file_box()
                 silk_file = TmpDir().path() + voice_file.name
                 await voice_file.to_file(silk_file)
@@ -219,15 +210,12 @@ class WechatyChannel(Channel):
                 # 转换 mp3 文件为 silk 格式
                 mp3_file = super().build_text_to_voice(reply_text)
                 silk_file = os.path.splitext(mp3_file)[0] + '.silk'
-                wav_file = os.path.splitext(mp3_file)[0] + '.wav'
-                mp3_to_wav(mp3_file, wav_file)
-                pcm_to_silk(wav_file, silk_file)
+                mp3_to_silk(mp3_file, silk_file)
                 t = int(time.time())
                 file_box = FileBox.from_file(silk_file, name=str(t) + '.silk')
                 await self.send(file_box, reply_user_id)
                 # 清除缓存文件
                 os.remove(mp3_file)
-                os.remove(wav_file)
                 os.remove(silk_file)
         except Exception as e:
             logger.exception(e)
