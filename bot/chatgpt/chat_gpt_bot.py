@@ -38,9 +38,9 @@ class ChatGPTBot(Bot):
         proxy = conf()["openai"].get('proxy')
         if proxy:
             openai.proxy = proxy
-        baiduconfig = conf().get('baiduunit')
-        if baiduconfig:
-            self.baiduUnitBot = BaiduUnitBot()
+        # baiduconfig = conf().get('baiduunit')
+        # if baiduconfig:
+        #     self.baiduUnitBot = BaiduUnitBot()
 
     def reply(self, query, context=None):
         """
@@ -71,18 +71,18 @@ class ChatGPTBot(Bot):
             logger.debug("[OPEN_AI] session query=%s", session)
 
             # 先调用百度机器人，如果能返回可以识别的意图，则返回结果，否则继续执行openai chat
-            if self.baiduUnitBot:
-                parsed = self.baiduUnitBot.getUnit2(query)
-                intent = self.baiduUnitBot.getIntent(parsed)
-                if intent:
-                    logger.info("Baidu_AI Intent= %s", intent)
-                    replytext = self.baiduUnitBot.getSay(parsed)
-                    if replytext:
-                        logger.info("Baidu_AI replytext= %s", replytext)
-                        threading.Thread(target=Session.save_session, args=(
-                            replytext, session_id, 0)).start()
-                        # Session.save_session(replytext, session_id, 0)
-                        return replytext
+            # if self.baiduUnitBot:
+            #     parsed = self.baiduUnitBot.getUnit2(query)
+            #     intent = self.baiduUnitBot.getIntent(parsed)
+            #     if intent:
+            #         logger.info("Baidu_AI Intent= %s", intent)
+            #         replytext = self.baiduUnitBot.getSay(parsed)
+            #         if replytext:
+            #             logger.info("Baidu_AI replytext= %s", replytext)
+            #             threading.Thread(target=Session.save_session, args=(
+            #                 replytext, session_id, 0)).start()
+            #             # Session.save_session(replytext, session_id, 0)
+            #             return replytext
 
             # 找不到意图了，继续执行
             reply_content = self.reply_text(session, session_id, 0)

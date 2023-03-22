@@ -35,16 +35,16 @@ def mp3_to_sil(mp3_path, silk_path, rate: int = 24000):
         return 声音长度，毫秒
     """
     audio = AudioSegment.from_mp3(mp3_path)
-    audio = audio.set_frame_rate(rate).set_channels(1)
+    # audio = audio.set_frame_rate(rate).set_channels(1)
     wav_data = audio.raw_data
-    silk_data = pysilk.encode(wav_data, data_rate=rate, sample_rate=rate)
+    silk_data = pysilk.encode(wav_data, data_rate=audio.frame_rate, sample_rate=audio.frame_rate)
     # Save the silk file
     with open(silk_path, "wb") as f:
         f.write(silk_data)
     return audio.duration_seconds*1000
 
 
-def silk_to_wav(silk_path, wav_path, rate: int = 24000):
+def sil_to_wav(silk_path, wav_path, rate: int = 24000):
     """
     silk 文件转 wav
     """

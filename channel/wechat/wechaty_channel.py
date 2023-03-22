@@ -15,7 +15,7 @@ from channel.channel import Channel
 from common.log import logger
 from common.tmp_dir import TmpDir
 from config import conf
-from voice.audio_convert import silk_to_wav, mp3_to_sil
+from voice.audio_convert import sil_to_wav, mp3_to_sil
 
 
 class WechatyChannel(Channel):
@@ -34,7 +34,7 @@ class WechatyChannel(Channel):
         global bot
         bot = Wechaty()
 
-        # bot.on('scan', self.on_scan)
+        bot.on('scan', self.on_scan)
         bot.on('login', self.on_login)
         bot.on('message', self.on_message)
         await bot.start()
@@ -42,12 +42,11 @@ class WechatyChannel(Channel):
     async def on_login(self, contact: Contact):
         logger.info('[WX] login user={}'.format(contact))
 
-    async def on_scan(self, status: ScanStatus, qr_code: Optional[str] = None,
-                      data: Optional[str] = None):
-        pass
+    async def on_scan(self, qr_code: str, status: ScanStatus, data: Optional[str] = None):
+
         # contact = self.Contact.load(self.contact_id)
-        # logger.info('[WX] scan user={}, scan status={}, scan qr_code={}'.format(
-        #     contact, status.name, qr_code))
+        logger.info(
+            '[WX]  scan status={}, scan qr_code={}'.format(status, qr_code))
         # print(f'user <{contact}> scan status: {status.name} , 'f'qr_code: {qr_code}')
 
     async def on_message(self, msg: Message):
@@ -102,7 +101,7 @@ class WechatyChannel(Channel):
                 logger.info("[WX]receive voice file: " + silk_file)
                 # 将文件转成wav格式音频
                 wav_file = os.path.splitext(silk_file)[0] + '.wav'
-                silk_to_wav(silk_file, wav_file)
+                sil_to_wav(silk_file, wav_file)
                 # 语音识别为文本
                 query = super().build_voice_to_text(wav_file)
                 # 删除临时文件
@@ -153,7 +152,7 @@ class WechatyChannel(Channel):
                 logger.info("[WX]receive voice file: " + silk_file)
                 # 将文件转成wav格式音频
                 wav_file = os.path.splitext(silk_file)[0] + '.wav'
-                silk_to_wav(silk_file, wav_file)
+                sil_to_wav(silk_file, wav_file)
                 # 语音识别为文本
                 content = super().build_voice_to_text(wav_file)
                 # 删除临时文件
@@ -211,9 +210,9 @@ class WechatyChannel(Channel):
                 mp3_file = super().build_text_to_voice(reply_text)
                 silk_file = os.path.splitext(mp3_file)[0] + '.sil'
                 voiceLength = mp3_to_sil(mp3_file, silk_file)
-                t = int(time.time())
-                file_box = FileBox.from_file(silk_file, name=str(t) + '.sil')
-                file_box.metadata = {"voiceLength": voiceLength}
+                # t = int(time.time())
+                file_box = FileBox.from_file(silk_file)
+                file_box.metadata = {'voiceLength': voiceLength}
                 await self.send(file_box, reply_user_id)
                 # 清除缓存文件
                 os.remove(mp3_file)
