@@ -11,7 +11,7 @@ from common.expired_dict import ExpiredDict
 from common.messages_tokens import MessagesTokens
 from bot.baidu.baidu_unit_bot import BaiduUnitBot
 
-#会话内容过期设置
+# 会话内容过期设置
 if conf().get('expires_in_seconds'):
     all_sessions = ExpiredDict(conf().get('expires_in_seconds'))
 else:
@@ -79,7 +79,9 @@ class ChatGPTBot(Bot):
                     replytext = self.baiduUnitBot.getSay(parsed)
                     if replytext:
                         logger.info("Baidu_AI replytext= %s", replytext)
-                        Session.save_session(replytext, session_id, 0)
+                        threading.Thread(target=Session.save_session, args=(
+                            replytext, session_id, 0)).start()
+                        # Session.save_session(replytext, session_id, 0)
                         return replytext
 
             # 找不到意图了，继续执行
@@ -87,10 +89,10 @@ class ChatGPTBot(Bot):
             logger.debug("[OPEN_AI] new_query=%s, user=%s, reply_cont=%s",
                          session, session_id, reply_content["content"])
             if reply_content["completion_tokens"] > 0:
-                # threading.Thread(target=Session.save_session, args=(
-                #     reply_content["content"], session_id, reply_content["total_tokens"])).start()
-                Session.save_session(
-                    reply_content["content"], session_id, reply_content["total_tokens"])
+                threading.Thread(target=Session.save_session, args=(
+                    reply_content["content"], session_id, reply_content["total_tokens"])).start()
+                # Session.save_session(
+                #     reply_content["content"], session_id, reply_content["total_tokens"])
             return reply_content["content"]
 
         elif context.get('type', None) == 'IMAGE_CREATE':
@@ -214,7 +216,7 @@ class Session(object):
         return session
 
     @staticmethod
-    async def save_session(answer, session_id, total_tokens):
+    def save_session(answer, session_id, total_tokens):
         """
         保存某用户的会话对
 
