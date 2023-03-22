@@ -15,7 +15,7 @@ from channel.channel import Channel
 from common.log import logger
 from common.tmp_dir import TmpDir
 from config import conf
-from voice.audio_convert import silk_to_wav, mp3_to_silk
+from voice.audio_convert import silk_to_wav, mp3_to_sil
 
 
 class WechatyChannel(Channel):
@@ -209,10 +209,11 @@ class WechatyChannel(Channel):
             if reply_text:
                 # 转换 mp3 文件为 silk 格式
                 mp3_file = super().build_text_to_voice(reply_text)
-                silk_file = os.path.splitext(mp3_file)[0] + '.silk'
-                mp3_to_silk(mp3_file, silk_file)
+                silk_file = os.path.splitext(mp3_file)[0] + '.sil'
+                voiceLength = mp3_to_sil(mp3_file, silk_file)
                 t = int(time.time())
-                file_box = FileBox.from_file(silk_file, name=str(t) + '.silk')
+                file_box = FileBox.from_file(silk_file, name=str(t) + '.sil')
+                file_box.metadata = {"voiceLength": voiceLength}
                 await self.send(file_box, reply_user_id)
                 # 清除缓存文件
                 os.remove(mp3_file)
