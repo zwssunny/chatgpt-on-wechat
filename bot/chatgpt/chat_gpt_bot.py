@@ -18,7 +18,7 @@ else:
     all_sessions = dict()
 
 # OpenAI model
-model_name = conf()["openai"].get('model') or "gpt-3.5-turbo"
+model_name = conf()["openai"].get("model", "gpt-3.5-turbo")
 
 # 计算消息token解码器
 messagesTokens = MessagesTokens(model_name)
@@ -38,9 +38,8 @@ class ChatGPTBot(Bot):
         proxy = conf()["openai"].get('proxy')
         if proxy:
             openai.proxy = proxy
-        # baiduconfig = conf().get('baiduunit')
-        # if baiduconfig:
-        #     self.baiduUnitBot = BaiduUnitBot()
+        if conf().get('baiduunit') and conf()['baiduunit'].get("enabled", False):
+            self.baiduUnitBot = BaiduUnitBot()
 
     def reply(self, query, context=None):
         """
@@ -71,18 +70,18 @@ class ChatGPTBot(Bot):
             logger.debug("[OPEN_AI] session query=%s", session)
 
             # 先调用百度机器人，如果能返回可以识别的意图，则返回结果，否则继续执行openai chat
-            # if self.baiduUnitBot:
-            #     parsed = self.baiduUnitBot.getUnit2(query)
-            #     intent = self.baiduUnitBot.getIntent(parsed)
-            #     if intent:
-            #         logger.info("Baidu_AI Intent= %s", intent)
-            #         replytext = self.baiduUnitBot.getSay(parsed)
-            #         if replytext:
-            #             logger.info("Baidu_AI replytext= %s", replytext)
-            #             threading.Thread(target=Session.save_session, args=(
-            #                 replytext, session_id, 0)).start()
-            #             # Session.save_session(replytext, session_id, 0)
-            #             return replytext
+            if self.baiduUnitBot:
+                parsed = self.baiduUnitBot.getUnit2(query)
+                intent = self.baiduUnitBot.getIntent(parsed)
+                if intent:
+                    logger.info("Baidu_AI Intent= %s", intent)
+                    replytext = self.baiduUnitBot.getSay(parsed)
+                    if replytext:
+                        logger.info("Baidu_AI replytext= %s", replytext)
+                        threading.Thread(target=Session.save_session, args=(
+                            replytext, session_id, 0)).start()
+                        # Session.save_session(replytext, session_id, 0)
+                        return replytext
 
             # 找不到意图了，继续执行
             reply_content = self.reply_text(session, session_id, 0)
@@ -108,7 +107,7 @@ class ChatGPTBot(Bot):
         '''
         try:
             response = openai.ChatCompletion.create(
-                model=model_name,  # 对话模型的名称"gpt-3.5-turbo",  # 对话模型的名称
+                model=model_name,  # 对话模型的名称
                 messages=query,
                 temperature=0.9,  # 值在[0,1]之间，越大表示回复越具有不确定性
                 # max_tokens=4096,  # 回复最大的字符数

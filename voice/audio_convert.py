@@ -15,33 +15,40 @@ def get_pcm_from_wav(wav_path):
 
 
 def mp3_to_wav(mp3_path, wav_path):
-    """把mp3格式转成pcm文件
+    """
+    把mp3格式转成pcm文件
     """
     audio = AudioSegment.from_mp3(mp3_path)
     audio.export(wav_path, format="wav")
 
 
-def pcm_to_sil(pcm_path, silk_path, rate: int = 24000):
+def pcm_to_silk(pcm_path, silk_path):
     """
     wav 文件转成 silk
+    return 声音长度，毫秒
     """
-    silk_data = pysilk.encode_file(pcm_path, data_rate=rate, sample_rate=rate)
+    audio = AudioSegment.from_wav(pcm_path)
+    wav_data = audio.raw_data
+    silk_data = pysilk.encode(
+        wav_data, data_rate=audio.frame_rate, sample_rate=audio.frame_rate)
     with open(silk_path, "wb") as f:
         f.write(silk_data)
+    return audio.duration_seconds * 1000
 
 
-def mp3_to_sil(mp3_path, silk_path, rate: int = 24000):
-    """mp3 文件转成 silk
-        return 声音长度，毫秒
+def mp3_to_sil(mp3_path, silk_path):
+    """
+    mp3 文件转成 silk
+    return 声音长度，毫秒
     """
     audio = AudioSegment.from_mp3(mp3_path)
-    # audio = audio.set_frame_rate(rate).set_channels(1)
     wav_data = audio.raw_data
-    silk_data = pysilk.encode(wav_data, data_rate=audio.frame_rate, sample_rate=audio.frame_rate)
+    silk_data = pysilk.encode(
+        wav_data, data_rate=audio.frame_rate, sample_rate=audio.frame_rate)
     # Save the silk file
     with open(silk_path, "wb") as f:
         f.write(silk_data)
-    return audio.duration_seconds*1000
+    return audio.duration_seconds * 1000
 
 
 def sil_to_wav(silk_path, wav_path, rate: int = 24000):
