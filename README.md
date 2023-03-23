@@ -14,6 +14,8 @@
 
 
 # 更新日志
+>**2023.03.23：** 增加谷歌语音识别，需要安装依赖库，Linux操作系统执行sudo apt (yum) install espeak ffmpeg libespeak1，pip install pyttsx3,pip install speechrecognition
+
 >**2023.03.15：** 增加百度语音识别，支持群里语音交流，建议参数设置中文消息前置唤醒词（如"小宝同学"，"小智同学"等）
 
 >**2023.03.14：** 利用百度UNIT云端机器人技能，预处理微信消息，如果命中意图（如时间，气候，计算等）则返回结果，然后由OPENAI chat托底，需要增加配置参数（baiduunit:{service_id:,api_key:,secret_key:,},可以到https://console.bce.baidu.com/ai平台申请聊天机器人和 API调用参数）

@@ -11,3 +11,6 @@ pilk
 pysilk
 pysilk-mod
 wave
+SpeechRecognition
+pyttsx3
+gTTS

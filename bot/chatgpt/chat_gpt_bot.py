@@ -38,7 +38,7 @@ class ChatGPTBot(Bot):
         proxy = conf()["openai"].get('proxy')
         if proxy:
             openai.proxy = proxy
-        if conf().get('baiduunit') and conf()['baiduunit'].get("enabled", False):
+        if conf().get('baiduunit'):
             self.baiduUnitBot = BaiduUnitBot()
 
     def reply(self, query, context=None):
@@ -70,7 +70,7 @@ class ChatGPTBot(Bot):
             logger.debug("[OPEN_AI] session query=%s", session)
 
             # 先调用百度机器人，如果能返回可以识别的意图，则返回结果，否则继续执行openai chat
-            if self.baiduUnitBot:
+            if conf().get('baiduunit') and conf()['baiduunit'].get("enabled", False):
                 parsed = self.baiduUnitBot.getUnit2(query)
                 intent = self.baiduUnitBot.getIntent(parsed)
                 if intent:
