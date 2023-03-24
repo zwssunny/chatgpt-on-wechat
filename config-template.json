@@ -10,6 +10,7 @@
   "character_desc": "你是ChatGPT, 一个由OpenAI训练的大型语言模型, 你旨在回答并解决人们的任何问题，并且可以使用多种语言与人交流。",
   "expires_in_seconds": 3600,  //会话上下文过期时间，单位秒，到时自动清理
   "wechaty_puppet_service_token": "WECHATY PUPPET SERVICE TOKEN", //如果channel_type为‘wxy’,[python-wechaty](https://github.com/wechaty/python-wechaty) 
+  "wechaty_puppet_service_endpoint": "127.0.0.1:8080", //如果channel_type为‘wxy’,且WECHATY_PUPPET="wechaty-puppet-wechat"免费协议
   "openai": {  //openai 机器人，画画或智语音识别
     "api_key": "YOUR API KEY", //填入上面创建的 OpenAI API KEY
     "proxy": "127.0.0.1:7890"                // 如果需要设置，代理客户端的ip和端口

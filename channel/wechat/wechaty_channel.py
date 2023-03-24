@@ -30,7 +30,12 @@ class WechatyChannel(Channel):
         config = conf()
         # 使用PadLocal协议 比较稳定(免费web协议 os.environ['WECHATY_PUPPET_SERVICE_ENDPOINT'] = '127.0.0.1:8080')
         token = config.get('wechaty_puppet_service_token')
-        os.environ['WECHATY_PUPPET_SERVICE_TOKEN'] = token
+        if token:
+            os.environ['WECHATY_PUPPET_SERVICE_TOKEN'] = token
+        # endpoint = config.get('wechaty_puppet_service_endpoint')
+        # if endpoint:
+        #     os.environ['WECHATY_PUPPET_SERVICE_ENDPOINT'] = endpoint
+
         global bot
         bot = Wechaty()
 
@@ -47,6 +52,7 @@ class WechatyChannel(Channel):
         # contact = self.Contact.load(self.contact_id)
         logger.info(
             '[WX]  scan status={}, scan qr_code={}'.format(status, qr_code))
+        time.sleep(5)
         # print(f'user <{contact}> scan status: {status.name} , 'f'qr_code: {qr_code}')
 
     async def on_message(self, msg: Message):
@@ -170,7 +176,7 @@ class WechatyChannel(Channel):
                         await self._do_send_group_img(content, room_id)
                     else:
                         if conf().get('voice_reply_voice'):
-                            await self._do_send_voice(content, room_id)
+                            await self._do_send_group_voice(content, room_id, room_name, from_user_id, from_user_name)
                         else:
                             await self._do_send_group(content, room_id, room_name, from_user_id, from_user_name)
 
@@ -259,6 +265,37 @@ class WechatyChannel(Channel):
         if reply_text:
             reply_text = '@' + group_user_name + ' ' + reply_text.strip()
             await self.send_group(conf().get("group_chat_reply_prefix", "") + reply_text, group_id)
+
+    async def _do_send_group_voice(self, query, group_id, group_name, group_user_id, group_user_name):
+        try:
+            if not query:
+                return
+            context = dict()
+            group_chat_in_one_session = conf().get('group_chat_in_one_session', [])
+            if ('ALL_GROUP' in group_chat_in_one_session or
+                group_name in group_chat_in_one_session or
+                    self.check_contain(group_name, group_chat_in_one_session)):
+                context['session_id'] = str(group_id)
+            else:
+                context['session_id'] = str(group_id) + '-' + str(group_user_id)
+
+            reply_text = super().build_reply_content(query, context)
+
+            if reply_text:
+                # 转换 mp3 文件为 silk 格式
+                mp3_file = super().build_text_to_voice(reply_text)
+                silk_file = os.path.splitext(mp3_file)[0] + '.sil'
+                voiceLength = mp3_to_sil(mp3_file, silk_file)
+                logger.info('[WX] sendVoice, receiver={}'.format(group_id))
+                # t = int(time.time())
+                file_box = FileBox.from_file(silk_file)
+                file_box.metadata = {'voiceLength': voiceLength}
+                await self.send_group(file_box, group_id)
+                # 清除缓存文件
+                os.remove(mp3_file)
+                os.remove(silk_file)
+        except Exception as e:
+            logger.exception(e)
 
     async def _do_send_group_img(self, query, reply_room_id):
         try:
