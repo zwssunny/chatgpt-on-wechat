@@ -50,7 +50,8 @@ class WechatChannel(Channel):
 
     def startup(self):
         # login by scan QRCode
-        itchat.auto_login(enableCmdQR=2, hotReload=conf().get('hot_reload', False))
+        itchat.auto_login(
+            enableCmdQR=2, hotReload=conf().get('hot_reload', False))
 
         # start message listener
         itchat.run()
@@ -67,15 +68,15 @@ class WechatChannel(Channel):
         if from_user_id == other_user_id:
             mp3_path = TmpDir().path() + msg['FileName']
             msg.download(mp3_path)
-            #mp3转wav
+            # mp3转wav
             wav_path = os.path.splitext(mp3_path)[0] + '.wav'
             mp3_to_wav(mp3_path=mp3_path, wav_path=wav_path)
-            #语音识别
+            # 语音识别
             content = super().build_voice_to_text(wav_path)
-            #删除临时文件
+            # 删除临时文件
             os.remove(wav_path)
             os.remove(mp3_path)
-            
+
             if conf().get('voice_reply_voice'):
                 self._do_send_voice(content, from_user_id)
             else:
@@ -98,15 +99,15 @@ class WechatChannel(Channel):
                 or self.check_contain(group_name, config.get('group_name_keyword_white_list'))):
             mp3_path = TmpDir().path() + msg['FileName']
             msg.download(mp3_path)
-            #mp3转wav
+            # mp3转wav
             wav_path = os.path.splitext(mp3_path)[0] + '.wav'
             mp3_to_wav(mp3_path=mp3_path, wav_path=wav_path)
-            #语音识别
+            # 语音识别
             content = super().build_voice_to_text(wav_path)
-            #删除临时文件
+            # 删除临时文件
             os.remove(wav_path)
             os.remove(mp3_path)
-            
+
             # 找到唤醒词
             wakeup_match_prefix = self.check_prefix(
                 content, config.get('group_chat_prefix'))
@@ -119,7 +120,7 @@ class WechatChannel(Channel):
                     self._do_send_img(content, group_id)
                 else:
                     if conf().get('voice_reply_voice'):
-                        self._do_send_voice(content, group_id)
+                        self._do_send_group_voice(content, msg)
                     else:
                         self._do_send_group(content, msg)
 
@@ -210,10 +211,10 @@ class WechatChannel(Channel):
             context['from_user_id'] = reply_user_id
             reply_text = super().build_reply_content(query, context)
             if reply_text:
-                replyFile = super().build_text_to_voice(reply_text)
-                itchat.send_file(replyFile, toUserName=reply_user_id)
+                mp3File = super().build_text_to_voice(reply_text)
+                itchat.send_file(mp3File, toUserName=reply_user_id)
                 logger.info('[WX] sendFile={}, receiver={}'.format(
-                    replyFile, reply_user_id))
+                    mp3File, reply_user_id))
         except Exception as e:
             logger.exception(e)
 
@@ -265,12 +266,36 @@ class WechatChannel(Channel):
                 self.check_contain(group_name, group_chat_in_one_session)):
             context['session_id'] = group_id
         else:
-            context['session_id'] = msg['ActualUserName']
+            context['session_id'] = str(group_id) + '-' + msg['ActualUserName']
         reply_text = super().build_reply_content(query, context)
         if reply_text:
             reply_text = '@' + msg['ActualNickName'] + ' ' + reply_text.strip()
             self.send(conf().get("group_chat_reply_prefix", "") +
                       reply_text, group_id)
+
+    def _do_send_group_voice(self, query, msg):
+        try:
+            if not query:
+                return
+            context = dict()
+            group_name = msg['User']['NickName']
+            group_id = msg['User']['UserName']
+            group_chat_in_one_session = conf().get('group_chat_in_one_session', [])
+            if ('ALL_GROUP' in group_chat_in_one_session or
+                    group_name in group_chat_in_one_session or
+                    self.check_contain(group_name, group_chat_in_one_session)):
+                context['session_id'] = group_id
+            else:
+                context['session_id'] = str(
+                    group_id) + '-' + msg['ActualUserName']
+            reply_text = super().build_reply_content(query, context)
+            if reply_text:
+                mp3File = super().build_text_to_voice(reply_text)
+                itchat.send_file(mp3File, toUserName=group_id)
+                logger.info('[WX] sendFile={}, receiver={}'.format(
+                    mp3File, group_id))
+        except Exception as e:
+            logger.exception(e)
 
     def check_prefix(self, content, prefix_list):
         for prefix in prefix_list:
