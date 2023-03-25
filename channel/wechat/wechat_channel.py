@@ -215,6 +215,8 @@ class WechatChannel(Channel):
                 itchat.send_file(mp3File, toUserName=reply_user_id)
                 logger.info('[WX] sendFile={}, receiver={}'.format(
                     mp3File, reply_user_id))
+                # 删除临时文件
+                os.remove(mp3File)
         except Exception as e:
             logger.exception(e)
 
@@ -294,6 +296,8 @@ class WechatChannel(Channel):
                 itchat.send_file(mp3File, toUserName=group_id)
                 logger.info('[WX] sendFile={}, receiver={}'.format(
                     mp3File, group_id))
+                # 删除临时文件
+                os.remove(mp3File)
         except Exception as e:
             logger.exception(e)
 
