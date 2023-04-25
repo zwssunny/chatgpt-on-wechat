@@ -12,7 +12,6 @@ import requests
 from bridge.reply import Reply, ReplyType
 from common.log import logger
 from common.tmp_dir import TmpDir
-from config import conf
 from voice.voice import Voice
 
 """
@@ -75,7 +74,7 @@ class VITSVoice(Voice):
             result = requests.post(url=url, data=data, headers=headers, timeout=self.timeout)
             result.raise_for_status()
             # Avoid the same filename under multithreading
-            fileName = TmpDir().path() + "reply-" + str(int(time.time())) + "-" + str(hash(text) & 0x7FFFFFFF) + ".wav"
+            fileName = TmpDir().path() + "reply-" + str(int(time.time())) + "-" + str(hash(text) & 0x7FFFFFFF) + "." + self.format
             with open(fileName, "wb") as f:
                 f.write(result.content)
             logger.info("[VITS] textToVoice text={} voice file name={}".format(text, fileName))
@@ -85,4 +84,3 @@ class VITSVoice(Voice):
             reply = Reply(ReplyType.ERROR, "抱歉，语音合成失败")
         finally:
             return reply
-
