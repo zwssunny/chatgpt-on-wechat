@@ -15,16 +15,16 @@ from common.tmp_dir import TmpDir
 from voice.voice import Voice
 
 """
-    server_url : 服务器url，如http://127.0.0.1:23456
-    api_key : 若服务器配置了API Key，在此填入
-    speaker_id : 说话人ID，由所使用的模型决定
-    format : 默认音频格式 可选wav,ogg,silk
-    lang : 语言，支持auto、zh-cn、en-us    
-    length : 调节语音长度，相当于调节语速，该数值越大语速越慢。
-    noise : 噪声
-    noisew : 噪声偏差
-    max : 分段阈值，按标点符号分段，加起来大于max时为一段文本。max<=0表示不分段。
-    timeout: 响应超时时间，根据vits-simple-api服务器性能不同配置合理的超时时间。    
+server_url : 服务器url，如http://127.0.0.1:23456
+api_key : 若服务器配置了API Key，在此填入
+speaker_id : 说话人ID，由所使用的模型决定
+format : 默认音频格式 可选wav,ogg,silk
+lang : 语言，支持auto、zh、ja,ko,en  
+length : 调节语音长度，相当于调节语速，该数值越大语速越慢。
+noise : 噪声
+noisew : 噪声偏差
+max : 分段阈值，按标点符号分段，加起来大于max时为一段文本。max<=0表示不分段。
+timeout: 响应超时时间，根据vits-simple-api服务器性能不同配置合理的超时时间。    
 """
 
 

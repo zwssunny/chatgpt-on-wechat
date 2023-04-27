@@ -8,7 +8,7 @@ VITS是一个可以通过输入语音数据集训练以克隆声线的AI文本�
     api_key : 若服务器配置了API Key，在此填入
     speaker_id : 说话人ID，由所使用的模型决定
     format : 默认音频格式 可选wav,ogg,silk
-    lang : 语言，支持auto、zh-cn、en-us
+    lang : 语言，支持auto、zh、ja,ko,en
     length : 调节语音长度，相当于调节语速，该数值越大语速越慢。
     noise : 噪声
     noisew : 噪声偏差
@@ -23,7 +23,7 @@ VITS是一个可以通过输入语音数据集训练以克隆声线的AI文本�
     "server_url": "http://127.0.0.1:23456",
     "api_key": "api_key",
     "speaker_id": 0,
-    "format": "mp3",
+    "format": "wav",
     "lang": "auto",
     "length": 1.0,
     "noise": 0.667,
