@@ -23,7 +23,6 @@ from common.time_check import time_checker
 from config import conf, get_appdata_dir
 from lib import itchat
 from lib.itchat.content import *
-from plugins import *
 
 
 @itchat.msg_register([TEXT, VOICE, PICTURE, NOTE])
@@ -160,7 +159,7 @@ class WechatChannel(ChatChannel):
     @_check
     def handle_group(self, cmsg: ChatMessage):
         if cmsg.ctype == ContextType.VOICE:
-            if conf().get("speech_recognition") != True:
+            if conf().get("group_speech_recognition") != True:
                 return
             logger.debug("[WX]receive voice for group msg: {}".format(cmsg.content))
         elif cmsg.ctype == ContextType.IMAGE:
