@@ -296,7 +296,7 @@ class PluginManager:
             "GODCMD",
             "ROLE",
             "TOOL",
-            "BGUNIT",
+            "BDUNIT",
             "BANWORDS",
             "FINISH",
             "DUNGEON",
