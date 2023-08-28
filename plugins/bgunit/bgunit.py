@@ -6,6 +6,9 @@ from uuid import getnode as get_mac
 
 import requests
 
+import asyncio
+import websockets
+
 import plugins
 from bridge.context import ContextType
 from bridge.reply import Reply, ReplyType
@@ -36,6 +39,18 @@ class BGunit(Plugin):
             self.service_id = conf["service_id"]
             self.api_key = conf["api_key"]
             self.secret_key = conf["secret_key"]
+            #websocket
+            self.websocketurl = conf["websocketurl"]
+            self.screenid = conf["screenid"]
+            #intent
+            self.pageintent = conf["pageintent"]
+            self.systemintent = conf["systemintent"]
+            self.highlightintent = conf["highlightintent"]
+            #pageindex
+            self.pages = self.loadpageconfig("pageindex.json")
+            self.systems = self.loadpageconfig("systemindex.json")
+            self.highlights = self.loadpageconfig("highlightindex.json")
+
             self.access_token = self.get_token()
             self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
             logger.info("[BGunit] inited")
@@ -61,12 +76,16 @@ class BGunit(Plugin):
                 slotstring=slots[0]['normalized_word']
             reply.content = self.getSay(parsed)+":"+intent+ "-" + slotstring
             e_context["reply"] = reply
+            #查找页面
+            pageindex= self.getIntentPageindex(intent,slotstring)
+            if pageindex > 0: #找到页面，就发送消息
+                self.sendPageCtl(intent,pageindex)
             e_context.action = EventAction.BREAK_PASS  # 事件结束，并跳过处理context的默认逻辑
         else:
             e_context.action = EventAction.CONTINUE  # 事件继续，交付给下个插件或默认逻辑
 
     def get_help_text(self, **kwargs):
-        help_text = "本插件返回对话中意图和词槽，这些技能由您的百度智能对话UNIT决定\n"
+        help_text = "本插件返回对话中意图和词槽，并操控大屏页面\n"
         return help_text
 
     def get_token(self):
@@ -255,3 +274,35 @@ class BGunit(Plugin):
             return ""
         else:
             return ""
+        
+    def sendPageCtl(self, intent, pageindex):
+        """
+        创建websocket链接，并发送消息
+        :param intent 意图 OPEN_PAGE,OPEN_SYSTEM,OPEN_HIGHLIGHT,CLOSE_PAGE,CLOSE_SYSTEM,CLOSE_HIGHTLIGHT
+        :param pageindex 页面编号,如：100,112,200,300，...... 具体看配置，pageindex.json,highlight.json,system.json
+
+        """
+        uri=self.websocketurl+self.screenid
+        with websockets.connect(uri) as websocket:
+            msg={"intent": intent, "pageIndex": pageindex}
+            websocket.send(msg)
+
+    def loadpageconfig(self, configfile) -> dict:   #读取配置参数文件
+        curdir = os.path.dirname(__file__)
+        config_path = os.path.join(curdir, configfile)
+        bconf = None
+        if  os.path.exists(config_path):  # 如果存在
+            with open(config_path, "r") as fr:
+                bconf = json.load(fr)
+        return bconf
+    
+    def getIntentPageindex(self, intent, pagename):
+        pageindex=-1
+        if intent in self.pageintent:
+            pageindex=self.pages[pagename]
+        elif intent in self.systemintent:
+            pageindex=self.systems[pagename]
+        elif intent in self.highlightintent:
+            pageindex=self.highlights[pagename]
+        return pageindex
+            
