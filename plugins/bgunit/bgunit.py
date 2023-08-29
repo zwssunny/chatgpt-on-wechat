@@ -3,11 +3,9 @@ import json
 import os
 import uuid
 from uuid import getnode as get_mac
-
 import requests
 
-import asyncio
-import websockets
+import websocket
 
 import plugins
 from bridge.context import ContextType
@@ -17,7 +15,7 @@ from plugins import *
 
 """利用百度UNIT实现智能对话
     如果命中意图，返回意图对应的回复，否则返回继续交付给下个插件处理
-    品高专用
+    页面操控，这些技能需要在百度UNIT技能中进行训练
 """
 
 
@@ -74,12 +72,12 @@ class BGunit(Plugin):
             slots=self.getSlots(parsed, intent)
             if slots.__len__()>0:
                 slotstring=slots[0]['normalized_word']
-            reply.content = self.getSay(parsed)+":"+intent+ "-" + slotstring
+            reply.content = self.getSay(parsed)     # +":"+intent+ "-" + slotstring
             e_context["reply"] = reply
             #查找页面
-            pageindex= self.getIntentPageindex(intent,slotstring)
-            if pageindex > 0: #找到页面，就发送消息
-                self.sendPageCtl(intent,pageindex)
+            pageindex= self.getIntentPageindex(intent, slotstring)
+            if pageindex > -1: #找到页面，就发送消息
+                self.sendPageCtl(intent, pageindex)
             e_context.action = EventAction.BREAK_PASS  # 事件结束，并跳过处理context的默认逻辑
         else:
             e_context.action = EventAction.CONTINUE  # 事件继续，交付给下个插件或默认逻辑
@@ -274,7 +272,7 @@ class BGunit(Plugin):
             return ""
         else:
             return ""
-        
+
     def sendPageCtl(self, intent, pageindex):
         """
         创建websocket链接，并发送消息
@@ -282,27 +280,43 @@ class BGunit(Plugin):
         :param pageindex 页面编号,如：100,112,200,300，...... 具体看配置，pageindex.json,highlight.json,system.json
 
         """
+        #创建websocket链接
         uri=self.websocketurl+self.screenid
-        with websockets.connect(uri) as websocket:
-            msg={"intent": intent, "pageIndex": pageindex}
-            websocket.send(msg)
+        ws=websocket.WebSocket()
+        ws.connect(uri)
+        #发送控制消息
+        sendmsg={"intent": intent, "pageIndex": pageindex}
+        msg = json.dumps(sendmsg)
+        logger.info(msg)
+        ws.send(msg)
 
     def loadpageconfig(self, configfile) -> dict:   #读取配置参数文件
+        """
+        加载配置文件，返回词典
+        :param configfile 配置文件名称，当前目录中找
+        :returns 词典key-value对
+        """
         curdir = os.path.dirname(__file__)
         config_path = os.path.join(curdir, configfile)
         bconf = None
         if  os.path.exists(config_path):  # 如果存在
-            with open(config_path, "r") as fr:
+            with open(config_path, "r", encoding="UTF-8") as fr:
                 bconf = json.load(fr)
         return bconf
-    
-    def getIntentPageindex(self, intent, pagename):
+
+    def getIntentPageindex(self, intent, pagename)->int:
+        """
+        返回页面编号
+        :param intent 意图：OPEN_PAGE,CLOSE_PAGE,......
+        :param pagename 页面名称或者菜单名称
+        :returns 页面编号
+        """
         pageindex=-1
-        if intent in self.pageintent:
+        if intent in self.pageintent: #在页面中查找
             pageindex=self.pages[pagename]
-        elif intent in self.systemintent:
+        elif intent in self.systemintent: #在第三方系统菜单中查找
             pageindex=self.systems[pagename]
-        elif intent in self.highlightintent:
+        elif intent in self.highlightintent: #在亮点场景中查找
             pageindex=self.highlights[pagename]
         return pageindex
-            
+
