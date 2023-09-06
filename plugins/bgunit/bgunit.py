@@ -70,7 +70,7 @@ class BGunit(Plugin):
             reply.type = ReplyType.TEXT
             slotstring=''
             slots=self.getSlots(parsed, intent)
-            if slots.__len__()>0:
+            if len(slots)>0:
                 slotstring=slots[0]['normalized_word']
             reply.content = self.getSay(parsed)     # +":"+intent+ "-" + slotstring
             e_context["reply"] = reply
@@ -78,6 +78,9 @@ class BGunit(Plugin):
             pageindex= self.getIntentPageindex(intent, slotstring)
             if pageindex > -1: #找到页面，就发送消息
                 self.sendPageCtl(intent, pageindex)
+            else:
+                logger.info("[BGunit] pagename not found!")
+
             e_context.action = EventAction.BREAK_PASS  # 事件结束，并跳过处理context的默认逻辑
         else:
             e_context.action = EventAction.CONTINUE  # 事件继续，交付给下个插件或默认逻辑
@@ -277,7 +280,7 @@ class BGunit(Plugin):
         """
         创建websocket链接，并发送消息
         :param intent 意图 OPEN_PAGE,OPEN_SYSTEM,OPEN_HIGHLIGHT,CLOSE_PAGE,CLOSE_SYSTEM,CLOSE_HIGHTLIGHT
-        :param pageindex 页面编号,如：100,112,200,300，...... 具体看配置，pageindex.json,highlight.json,system.json
+        :param pageindex 页面编号,0,1,2,3...... 具体看配置，pageindex.json,highlight.json,system.json
 
         """
         #创建websocket链接
@@ -313,10 +316,10 @@ class BGunit(Plugin):
         """
         pageindex=-1
         if intent in self.pageintent: #在页面中查找
-            pageindex=self.pages[pagename]
+            pageindex=self.pages.get(pagename, -1)
         elif intent in self.systemintent: #在第三方系统菜单中查找
-            pageindex=self.systems[pagename]
+            pageindex=self.systems.get(pagename, -1)
         elif intent in self.highlightintent: #在亮点场景中查找
-            pageindex=self.highlights[pagename]
+            pageindex=self.highlights.get(pagename, -1)
         return pageindex
 
