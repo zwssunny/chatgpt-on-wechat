@@ -26,3 +26,7 @@ wechatpy
 
 --extra-index-url https://pypi.python.org/simple
 chatgpt_tool_hub==0.4.6
+
+#websocket
+
+websocket-client==1.2.3
