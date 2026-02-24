@@ -174,7 +174,10 @@ available_setting = {
     "zhipu_ai_api_key": "",
     "zhipu_ai_api_base": "https://open.bigmodel.cn/api/paas/v4",
     "moonshot_api_key": "",
-    "moonshot_base_url": "https://api.moonshot.cn/v1/chat/completions",
+    "moonshot_base_url": "https://api.moonshot.cn/v1",
+    # 豆包(火山方舟) 平台配置
+    "ark_api_key": "",
+    "ark_base_url": "https://ark.cn-beijing.volces.com/api/v3",
     #魔搭社区 平台配置
     "modelscope_api_key": "",
     "modelscope_base_url": "https://api-inference.modelscope.cn/v1/chat/completions",
@@ -183,6 +186,7 @@ available_setting = {
     "linkai_api_key": "",
     "linkai_app_code": "",
     "linkai_api_base": "https://api.link-ai.tech",  # linkAI服务地址
+    "cloud_host": "client.link-ai.tech",
     "minimax_api_key": "",
     "Minimax_group_id": "",
     "Minimax_base_url": "",
@@ -245,9 +249,9 @@ class Config(dict):
                 self.user_datas = pickle.load(f)
                 logger.debug("[Config] User datas loaded.")
         except FileNotFoundError as e:
-            logger.info("[Config] User datas file not found, ignore.")
+            logger.debug("[Config] User datas file not found, ignore.")
         except Exception as e:
-            logger.info("[Config] User datas error: {}".format(e))
+            logger.warning("[Config] User datas error: {}".format(e))
             self.user_datas = {}
 
     def save_user_datas(self):

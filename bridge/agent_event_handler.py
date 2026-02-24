@@ -74,7 +74,7 @@ class AgentEventHandler:
         # Only send thinking process if followed by tool calls
         if tool_calls:
             if self.current_thinking.strip():
-                logger.debug(f"💭 {self.current_thinking.strip()[:200]}{'...' if len(self.current_thinking) > 200 else ''}")
+                logger.info(f"💭 {self.current_thinking.strip()[:200]}{'...' if len(self.current_thinking) > 200 else ''}")
                 # Send thinking process to channel
                 self._send_to_channel(f"{self.current_thinking.strip()}")
         else:
@@ -94,15 +94,15 @@ class AgentEventHandler:
     
     def _send_to_channel(self, message):
         """
-        Try to send message to channel
-        
-        Args:
-            message: Message to send
+        Try to send intermediate message to channel.
+        Skipped in SSE mode because thinking text is already streamed via on_event.
         """
+        if self.context and self.context.get("on_event"):
+            return
+
         if self.channel:
             try:
                 from bridge.reply import Reply, ReplyType
-                # Create a Reply object for the message
                 reply = Reply(ReplyType.TEXT, message)
                 self.channel._send(reply, self.context)
             except Exception as e:

@@ -11,6 +11,7 @@ from typing import Optional, List
 from agent.protocol import Agent
 from agent.tools import ToolManager
 from common.log import logger
+from common.utils import expand_path
 
 
 class AgentInitializer:
@@ -46,7 +47,7 @@ class AgentInitializer:
         from config import conf
         
         # Get workspace from config
-        workspace_root = os.path.expanduser(conf().get("agent_workspace", "~/cow"))
+        workspace_root = expand_path(conf().get("agent_workspace", "~/cow"))
         
         # Migrate API keys
         self._migrate_config_to_env(workspace_root)
@@ -122,7 +123,7 @@ class AgentInitializer:
     
     def _load_env_file(self):
         """Load environment variables from .env file"""
-        env_file = os.path.expanduser("~/.cow/.env")
+        env_file = expand_path("~/.cow/.env")
         if os.path.exists(env_file):
             try:
                 from dotenv import load_dotenv
@@ -218,13 +219,20 @@ class AgentInitializer:
         
         for tool_name in tool_manager.tool_classes.keys():
             try:
+                # Skip web_search if no API key is available
+                if tool_name == "web_search":
+                    from agent.tools.web_search.web_search import WebSearch
+                    if not WebSearch.is_available():
+                        logger.debug("[AgentInitializer] WebSearch skipped - no BOCHA_API_KEY or LINKAI_API_KEY")
+                        continue
+
                 # Special handling for EnvConfig tool
                 if tool_name == "env_config":
                     from agent.tools import EnvConfig
                     tool = EnvConfig({"agent_bridge": self.agent_bridge})
                 else:
                     tool = tool_manager.create_tool(tool_name)
-                
+
                 if tool:
                     # Apply workspace config to file operation tools
                     if tool_name in ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls']:
@@ -283,7 +291,7 @@ class AgentInitializer:
         """Initialize skill manager"""
         try:
             from agent.skills import SkillManager
-            skill_manager = SkillManager(workspace_dir=workspace_root)
+            skill_manager = SkillManager(custom_dir=os.path.join(workspace_root, "skills"))
             return skill_manager
         except Exception as e:
             logger.warning(f"[AgentInitializer] Failed to initialize SkillManager: {e}")
@@ -338,7 +346,7 @@ class AgentInitializer:
             "linkai_api_key": "LINKAI_API_KEY",
         }
         
-        env_file = os.path.expanduser("~/.cow/.env")
+        env_file = expand_path("~/.cow/.env")
         
         # Read existing env vars
         existing_env_vars = {}

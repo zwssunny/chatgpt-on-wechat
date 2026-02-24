@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import threading
 
@@ -61,7 +62,8 @@ class Agent:
                 # Auto-create skill manager
                 try:
                     from agent.skills import SkillManager
-                    self.skill_manager = SkillManager(workspace_dir=workspace_dir)
+                    custom_dir = os.path.join(workspace_dir, "skills") if workspace_dir else None
+                    self.skill_manager = SkillManager(custom_dir=custom_dir)
                     logger.debug(f"Initialized SkillManager with {len(self.skill_manager.skills)} skills")
                 except Exception as e:
                     logger.warning(f"Failed to initialize SkillManager: {e}")
@@ -99,19 +101,24 @@ class Agent:
     def get_full_system_prompt(self, skill_filter=None) -> str:
         """
         Get the full system prompt including skills.
-        
+
         Note: Skills are now built into the system prompt by PromptBuilder,
         so we just return the base prompt directly. This method is kept for
         backward compatibility.
-        
+
         :param skill_filter: Optional list of skill names to include (deprecated)
         :return: Complete system prompt
         """
-        # Skills are now included in system_prompt by PromptBuilder
+        prompt = self.system_prompt
+
+        # Rebuild tool list section to reflect current self.tools
+        prompt = self._rebuild_tool_list_section(prompt)
+
         # If runtime_info contains dynamic time function, rebuild runtime section
         if self.runtime_info and callable(self.runtime_info.get('_get_current_time')):
-            return self._rebuild_runtime_section(self.system_prompt)
-        return self.system_prompt
+            prompt = self._rebuild_runtime_section(prompt)
+
+        return prompt
     
     def _rebuild_runtime_section(self, prompt: str) -> str:
         """
@@ -140,7 +147,9 @@ class Agent:
             if self.runtime_info.get("model"):
                 runtime_parts.append(f"模型={self.runtime_info['model']}")
             if self.runtime_info.get("workspace"):
-                runtime_parts.append(f"工作空间={self.runtime_info['workspace']}")
+                # Replace backslashes with forward slashes for Windows paths
+                workspace_path = str(self.runtime_info['workspace']).replace('\\', '/')
+                runtime_parts.append(f"工作空间={workspace_path}")
             if self.runtime_info.get("channel") and self.runtime_info.get("channel") != "web":
                 runtime_parts.append(f"渠道={self.runtime_info['channel']}")
             
@@ -159,7 +168,31 @@ class Agent:
         except Exception as e:
             logger.warning(f"Failed to rebuild runtime section: {e}")
             return prompt
-    
+
+    def _rebuild_tool_list_section(self, prompt: str) -> str:
+        """
+        Rebuild the tool list inside the '## 工具系统' section so that it
+        always reflects the current ``self.tools`` (handles dynamic add/remove
+        of conditional tools like web_search).
+        """
+        import re
+        from agent.prompt.builder import _build_tooling_section
+
+        try:
+            if not self.tools:
+                return prompt
+
+            new_lines = _build_tooling_section(self.tools, "zh")
+            new_section = "\n".join(new_lines).rstrip("\n")
+
+            # Replace existing tooling section
+            pattern = r'## 工具系统\s*\n.*?(?=\n## |\Z)'
+            updated = re.sub(pattern, new_section, prompt, count=1, flags=re.DOTALL)
+            return updated
+        except Exception as e:
+            logger.warning(f"Failed to rebuild tool list section: {e}")
+            return prompt
+
     def refresh_skills(self):
         """Refresh the loaded skills."""
         if self.skill_manager:
@@ -245,26 +278,66 @@ class Agent:
 
     def _estimate_message_tokens(self, message: dict) -> int:
         """
-        Estimate token count for a message using chars/4 heuristic.
-        This is a conservative estimate (tends to overestimate).
+        Estimate token count for a message.
+
+        Uses chars/3 for Chinese-heavy content and chars/4 for ASCII-heavy content,
+        plus per-block overhead for tool_use / tool_result structures.
 
         :param message: Message dict with 'role' and 'content'
         :return: Estimated token count
         """
         content = message.get('content', '')
         if isinstance(content, str):
-            return max(1, len(content) // 4)
+            return max(1, self._estimate_text_tokens(content))
         elif isinstance(content, list):
-            # Handle multi-part content (text + images)
-            total_chars = 0
+            total_tokens = 0
             for part in content:
-                if isinstance(part, dict) and part.get('type') == 'text':
-                    total_chars += len(part.get('text', ''))
-                elif isinstance(part, dict) and part.get('type') == 'image':
-                    # Estimate images as ~1200 tokens
-                    total_chars += 4800
-            return max(1, total_chars // 4)
+                if not isinstance(part, dict):
+                    continue
+                block_type = part.get('type', '')
+                if block_type == 'text':
+                    total_tokens += self._estimate_text_tokens(part.get('text', ''))
+                elif block_type == 'image':
+                    total_tokens += 1200
+                elif block_type == 'tool_use':
+                    # tool_use has id + name + input (JSON-encoded)
+                    total_tokens += 50  # overhead for structure
+                    input_data = part.get('input', {})
+                    if isinstance(input_data, dict):
+                        import json
+                        input_str = json.dumps(input_data, ensure_ascii=False)
+                        total_tokens += self._estimate_text_tokens(input_str)
+                elif block_type == 'tool_result':
+                    # tool_result has tool_use_id + content
+                    total_tokens += 30  # overhead for structure
+                    result_content = part.get('content', '')
+                    if isinstance(result_content, str):
+                        total_tokens += self._estimate_text_tokens(result_content)
+                else:
+                    # Unknown block type, estimate conservatively
+                    total_tokens += 10
+            return max(1, total_tokens)
         return 1
+
+    @staticmethod
+    def _estimate_text_tokens(text: str) -> int:
+        """
+        Estimate token count for a text string.
+
+        Chinese / CJK characters typically use ~1.5 tokens each,
+        while ASCII uses ~0.25 tokens per char (4 chars/token).
+        We use a weighted average based on the character mix.
+
+        :param text: Input text
+        :return: Estimated token count
+        """
+        if not text:
+            return 0
+        # Count non-ASCII characters (CJK, emoji, etc.)
+        non_ascii = sum(1 for c in text if ord(c) > 127)
+        ascii_count = len(text) - non_ascii
+        # CJK chars: ~1.5 tokens each; ASCII: ~0.25 tokens per char
+        return int(non_ascii * 1.5 + ascii_count * 0.25) + 1
 
     def _find_tool(self, tool_name: str):
         """Find and return a tool with the specified name"""
@@ -422,7 +495,17 @@ class Agent:
         )
 
         # Execute
-        response = executor.run_stream(user_message)
+        try:
+            response = executor.run_stream(user_message)
+        except Exception:
+            # If executor cleared its messages (context overflow / message format error),
+            # sync that back to the Agent's own message list so the next request
+            # starts fresh instead of hitting the same overflow forever.
+            if len(executor.messages) == 0:
+                with self.messages_lock:
+                    self.messages.clear()
+                    logger.info("[Agent] Cleared Agent message history after executor recovery")
+            raise
 
         # Append only the NEW messages from this execution (thread-safe)
         # This allows concurrent requests to both contribute to history

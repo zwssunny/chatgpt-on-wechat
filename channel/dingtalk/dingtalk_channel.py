@@ -21,6 +21,7 @@ from dingtalk_stream.card_replier import CardReplier
 from bridge.context import Context, ContextType
 from bridge.reply import Reply, ReplyType
 from channel.chat_channel import ChatChannel
+from common.utils import expand_path
 from channel.dingtalk.dingtalk_message import DingTalkMessage
 from common.expired_dict import ExpiredDict
 from common.log import logger
@@ -89,13 +90,9 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
     dingtalk_client_secret = conf().get('dingtalk_client_secret')
 
     def setup_logger(self):
-        logger = logging.getLogger()
-        handler = logging.StreamHandler()
-        handler.setFormatter(
-            logging.Formatter('%(asctime)s %(name)-8s %(levelname)-8s %(message)s [%(filename)s:%(lineno)d]'))
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-        return logger
+        # Suppress verbose logs from dingtalk_stream SDK
+        logging.getLogger("dingtalk_stream").setLevel(logging.WARNING)
+        return logging.getLogger("DingTalk")
 
     def __init__(self):
         super().__init__()
@@ -103,6 +100,7 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
         self.logger = self.setup_logger()
         # 历史消息id暂存，用于幂等控制
         self.receivedMsgs = ExpiredDict(conf().get("expires_in_seconds", 3600))
+        self._stream_client = None
         logger.debug("[DingTalk] client_id={}, client_secret={} ".format(
             self.dingtalk_client_id, self.dingtalk_client_secret))
         # 无需群校验和前缀
@@ -118,9 +116,19 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
     def startup(self):
         credential = dingtalk_stream.Credential(self.dingtalk_client_id, self.dingtalk_client_secret)
         client = dingtalk_stream.DingTalkStreamClient(credential)
+        self._stream_client = client
         client.register_callback_handler(dingtalk_stream.chatbot.ChatbotMessage.TOPIC, self)
         logger.info("[DingTalk] ✅ Stream connected, ready to receive messages")
         client.start_forever()
+
+    def stop(self):
+        if self._stream_client:
+            try:
+                self._stream_client.stop()
+                logger.info("[DingTalk] Stream client stopped")
+            except Exception as e:
+                logger.warning(f"[DingTalk] Error stopping stream client: {e}")
+            self._stream_client = None
     
     def get_access_token(self):
         """
@@ -276,7 +284,7 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
                 
                 # 保存到临时文件
                 file_name = os.path.basename(file_path) or f"media_{uuid.uuid4()}"
-                workspace_root = os.path.expanduser(conf().get("agent_workspace", "~/cow"))
+                workspace_root = expand_path(conf().get("agent_workspace", "~/cow"))
                 tmp_dir = os.path.join(workspace_root, "tmp")
                 os.makedirs(tmp_dir, exist_ok=True)
                 temp_file = os.path.join(tmp_dir, file_name)

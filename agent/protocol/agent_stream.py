@@ -336,7 +336,7 @@ class AgentStreamExecutor:
                         # Build tool result block (Claude format)
                         # Format content in a way that's easy for LLM to understand
                         is_error = result.get("status") == "error"
-                        
+
                         if is_error:
                             # For errors, provide clear error message
                             result_content = f"Error: {result.get('result', 'Unknown error')}"
@@ -349,7 +349,16 @@ class AgentStreamExecutor:
                         else:
                             # Fallback to full JSON
                             result_content = json.dumps(result, ensure_ascii=False)
-                        
+
+                        # Truncate excessively large tool results for the current turn
+                        # Historical turns will be further truncated in _trim_messages()
+                        MAX_CURRENT_TURN_RESULT_CHARS = 50000
+                        if len(result_content) > MAX_CURRENT_TURN_RESULT_CHARS:
+                            truncated_len = len(result_content)
+                            result_content = result_content[:MAX_CURRENT_TURN_RESULT_CHARS] + \
+                                f"\n\n[Output truncated: {truncated_len} chars total, showing first {MAX_CURRENT_TURN_RESULT_CHARS} chars]"
+                            logger.info(f"📎 Truncated tool result for '{tool_call['name']}': {truncated_len} -> {MAX_CURRENT_TURN_RESULT_CHARS} chars")
+
                         tool_result_block = {
                             "type": "tool_result",
                             "tool_use_id": tool_call["id"],
@@ -470,7 +479,8 @@ class AgentStreamExecutor:
 
         return final_response
 
-    def _call_llm_stream(self, retry_on_empty=True, retry_count=0, max_retries=3) -> Tuple[str, List[Dict]]:
+    def _call_llm_stream(self, retry_on_empty=True, retry_count=0, max_retries=3,
+                         _overflow_retry: bool = False) -> Tuple[str, List[Dict]]:
         """
         Call LLM with streaming and automatic retry on errors
         
@@ -478,6 +488,7 @@ class AgentStreamExecutor:
             retry_on_empty: Whether to retry once if empty response is received
             retry_count: Current retry attempt (internal use)
             max_retries: Maximum number of retries for API errors
+            _overflow_retry: Internal flag indicating this is a retry after context overflow
         
         Returns:
             (response_text, tool_calls)
@@ -572,6 +583,11 @@ class AgentStreamExecutor:
                     if finish_reason:
                         stop_reason = finish_reason
 
+                    # Skip reasoning_content (internal thinking from models like GLM-5)
+                    reasoning_delta = delta.get("reasoning_content") or ""
+                    # if reasoning_delta:
+                    #     logger.debug(f"🧠 [thinking] {reasoning_delta[:100]}...")
+
                     # Handle text content
                     content_delta = delta.get("content") or ""
                     if content_delta:
@@ -629,10 +645,23 @@ class AgentStreamExecutor:
             if is_context_overflow or is_message_format_error:
                 error_type = "context overflow" if is_context_overflow else "message format error"
                 logger.error(f"💥 {error_type} detected: {e}")
-                # Clear message history to recover
+
+                # Strategy: try aggressive trimming first, only clear as last resort
+                if is_context_overflow and not _overflow_retry:
+                    trimmed = self._aggressive_trim_for_overflow()
+                    if trimmed:
+                        logger.warning("🔄 Aggressively trimmed context, retrying...")
+                        return self._call_llm_stream(
+                            retry_on_empty=retry_on_empty,
+                            retry_count=retry_count,
+                            max_retries=max_retries,
+                            _overflow_retry=True
+                        )
+
+                # Aggressive trim didn't help or this is a message format error
+                # -> clear everything
                 logger.warning("🔄 Clearing conversation history to recover")
                 self.messages.clear()
-                # Raise special exception with user-friendly message
                 if is_context_overflow:
                     raise Exception(
                         "抱歉，对话历史过长导致上下文溢出。我已清空历史记录，请重新描述你的需求。"
@@ -678,6 +707,13 @@ class AgentStreamExecutor:
         tool_calls = []
         for idx in sorted(tool_calls_buffer.keys()):
             tc = tool_calls_buffer[idx]
+
+            # Ensure tool call has a valid ID (some providers return empty/None IDs)
+            tool_id = tc.get("id") or ""
+            if not tool_id:
+                import uuid
+                tool_id = f"call_{uuid.uuid4().hex[:24]}"
+
             try:
                 # Safely get arguments, handle None case
                 args_str = tc.get("arguments") or ""
@@ -690,11 +726,11 @@ class AgentStreamExecutor:
                 logger.error(f"Arguments length: {len(args_str)} chars")
                 logger.error(f"Arguments preview: {args_preview}...")
                 logger.error(f"JSON decode error: {e}")
-                
+
                 # Return a clear error message to the LLM instead of empty dict
                 # This helps the LLM understand what went wrong
                 tool_calls.append({
-                    "id": tc["id"],
+                    "id": tool_id,
                     "name": tc["name"],
                     "arguments": {},
                     "_parse_error": f"Invalid JSON in tool arguments: {args_preview}... Error: {str(e)}. Tip: For large content, consider splitting into smaller chunks or using a different approach."
@@ -702,7 +738,7 @@ class AgentStreamExecutor:
                 continue
 
             tool_calls.append({
-                "id": tc["id"],
+                "id": tool_id,
                 "name": tc["name"],
                 "arguments": arguments
             })
@@ -946,10 +982,164 @@ class AgentStreamExecutor:
             for msg in turn['messages']
         )
 
+    def _truncate_historical_tool_results(self):
+        """
+        Truncate tool_result content in historical messages to reduce context size.
+
+        Current turn results are kept at 30K chars (truncated at creation time).
+        Historical turn results are further truncated to 10K chars here.
+        This runs before token-based trimming so that we first shrink oversized
+        results, potentially avoiding the need to drop entire turns.
+        """
+        MAX_HISTORY_RESULT_CHARS = 20000
+
+        if len(self.messages) < 2:
+            return
+
+        # Find where the last user text message starts (= current turn boundary)
+        # We skip the current turn's messages to preserve their full content
+        current_turn_start = len(self.messages)
+        for i in range(len(self.messages) - 1, -1, -1):
+            msg = self.messages[i]
+            if msg.get("role") == "user":
+                content = msg.get("content", [])
+                if isinstance(content, list) and any(
+                    isinstance(b, dict) and b.get("type") == "text" for b in content
+                ):
+                    current_turn_start = i
+                    break
+                elif isinstance(content, str):
+                    current_turn_start = i
+                    break
+
+        truncated_count = 0
+        for i in range(current_turn_start):
+            msg = self.messages[i]
+            if msg.get("role") != "user":
+                continue
+            content = msg.get("content", [])
+            if not isinstance(content, list):
+                continue
+
+            for block in content:
+                if not isinstance(block, dict) or block.get("type") != "tool_result":
+                    continue
+                result_str = block.get("content", "")
+                if isinstance(result_str, str) and len(result_str) > MAX_HISTORY_RESULT_CHARS:
+                    original_len = len(result_str)
+                    block["content"] = result_str[:MAX_HISTORY_RESULT_CHARS] + \
+                        f"\n\n[Historical output truncated: {original_len} -> {MAX_HISTORY_RESULT_CHARS} chars]"
+                    truncated_count += 1
+
+        if truncated_count > 0:
+            logger.info(f"📎 Truncated {truncated_count} historical tool result(s) to {MAX_HISTORY_RESULT_CHARS} chars")
+
+    def _aggressive_trim_for_overflow(self) -> bool:
+        """
+        Aggressively trim context when a real overflow error is returned by the API.
+
+        This method goes beyond normal _trim_messages by:
+        1. Truncating all tool results (including current turn) to a small limit
+        2. Keeping only the last 5 complete conversation turns
+        3. Truncating overly long user messages
+
+        Returns:
+            True if messages were trimmed (worth retrying), False if nothing left to trim
+        """
+        if not self.messages:
+            return False
+
+        original_count = len(self.messages)
+
+        # Step 1: Aggressively truncate ALL tool results to 5K chars
+        AGGRESSIVE_LIMIT = 10000
+        truncated = 0
+        for msg in self.messages:
+            content = msg.get("content", [])
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                # Truncate tool_result blocks
+                if block.get("type") == "tool_result":
+                    result_str = block.get("content", "")
+                    if isinstance(result_str, str) and len(result_str) > AGGRESSIVE_LIMIT:
+                        block["content"] = (
+                            result_str[:AGGRESSIVE_LIMIT]
+                            + f"\n\n[Truncated for context recovery: "
+                            f"{len(result_str)} -> {AGGRESSIVE_LIMIT} chars]"
+                        )
+                        truncated += 1
+                # Truncate tool_use input blocks (e.g. large write content)
+                if block.get("type") == "tool_use" and isinstance(block.get("input"), dict):
+                    input_str = json.dumps(block["input"], ensure_ascii=False)
+                    if len(input_str) > AGGRESSIVE_LIMIT:
+                        # Keep only a summary of the input
+                        for key, val in block["input"].items():
+                            if isinstance(val, str) and len(val) > 1000:
+                                block["input"][key] = (
+                                    val[:1000]
+                                    + f"... [truncated {len(val)} chars]"
+                                )
+                        truncated += 1
+
+        # Step 2: Truncate overly long user text messages (e.g. pasted content)
+        USER_MSG_LIMIT = 10000
+        for msg in self.messages:
+            if msg.get("role") != "user":
+                continue
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "")
+                        if len(text) > USER_MSG_LIMIT:
+                            block["text"] = (
+                                text[:USER_MSG_LIMIT]
+                                + f"\n\n[Message truncated for context recovery: "
+                                f"{len(text)} -> {USER_MSG_LIMIT} chars]"
+                            )
+                            truncated += 1
+            elif isinstance(content, str) and len(content) > USER_MSG_LIMIT:
+                msg["content"] = (
+                    content[:USER_MSG_LIMIT]
+                    + f"\n\n[Message truncated for context recovery: "
+                    f"{len(content)} -> {USER_MSG_LIMIT} chars]"
+                )
+                truncated += 1
+
+        # Step 3: Keep only the last 5 complete turns
+        turns = self._identify_complete_turns()
+        if len(turns) > 5:
+            kept_turns = turns[-5:]
+            new_messages = []
+            for turn in kept_turns:
+                new_messages.extend(turn["messages"])
+            removed = len(turns) - 5
+            self.messages[:] = new_messages
+            logger.info(
+                f"🔧 Aggressive trim: removed {removed} old turns, "
+                f"truncated {truncated} large blocks, "
+                f"{original_count} -> {len(self.messages)} messages"
+            )
+            return True
+
+        if truncated > 0:
+            logger.info(
+                f"🔧 Aggressive trim: truncated {truncated} large blocks "
+                f"(no turns removed, only {len(turns)} turn(s) left)"
+            )
+            return True
+
+        # Nothing left to trim
+        logger.warning("🔧 Aggressive trim: nothing to trim, will clear history")
+        return False
+
     def _trim_messages(self):
         """
         智能清理消息历史，保持对话完整性
-        
+
         使用完整轮次作为清理单位，确保：
         1. 不会在对话中间截断
         2. 工具调用链（tool_use + tool_result）保持完整
@@ -957,6 +1147,9 @@ class AgentStreamExecutor:
         """
         if not self.messages or not self.agent:
             return
+
+        # Step 0: Truncate large tool results in historical turns (30K -> 10K)
+        self._truncate_historical_tool_results()
 
         # Step 1: 识别完整轮次
         turns = self._identify_complete_turns()

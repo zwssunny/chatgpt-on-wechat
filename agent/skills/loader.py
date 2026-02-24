@@ -12,25 +12,20 @@ from agent.skills.frontmatter import parse_frontmatter, parse_metadata, parse_bo
 
 class SkillLoader:
     """Loads skills from various directories."""
-    
-    def __init__(self, workspace_dir: Optional[str] = None):
-        """
-        Initialize the skill loader.
-        
-        :param workspace_dir: Agent workspace directory (for workspace-specific skills)
-        """
-        self.workspace_dir = workspace_dir
+
+    def __init__(self):
+        pass
     
     def load_skills_from_dir(self, dir_path: str, source: str) -> LoadSkillsResult:
         """
         Load skills from a directory.
-        
+
         Discovery rules:
         - Direct .md files in the root directory
         - Recursive SKILL.md files under subdirectories
-        
+
         :param dir_path: Directory path to scan
-        :param source: Source identifier (e.g., 'managed', 'workspace', 'bundled')
+        :param source: Source identifier ('builtin' or 'custom')
         :return: LoadSkillsResult with skills and diagnostics
         """
         skills = []
@@ -188,16 +183,14 @@ class SkillLoader:
         import json
         
         config_path = os.path.join(skill_dir, "config.json")
-        template_path = os.path.join(skill_dir, "config.json.template")
         
-        # Try to load config.json or fallback to template
-        config_file = config_path if os.path.exists(config_path) else template_path
-        
-        if not os.path.exists(config_file):
-            return default_description
+        # Without config.json, skip this skill entirely (return empty to trigger exclusion)
+        if not os.path.exists(config_path):
+            logger.debug(f"[SkillLoader] linkai-agent skipped: no config.json found")
+            return ""
         
         try:
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             
             apps = config.get("apps", [])
@@ -218,61 +211,49 @@ class SkillLoader:
     
     def load_all_skills(
         self,
-        managed_dir: Optional[str] = None,
-        workspace_skills_dir: Optional[str] = None,
-        extra_dirs: Optional[List[str]] = None,
+        builtin_dir: Optional[str] = None,
+        custom_dir: Optional[str] = None,
     ) -> Dict[str, SkillEntry]:
         """
-        Load skills from all configured locations with precedence.
-        
+        Load skills from builtin and custom directories.
+
         Precedence (lowest to highest):
-        1. Extra directories
-        2. Managed skills directory
-        3. Workspace skills directory
-        
-        :param managed_dir: Managed skills directory (e.g., ~/.cow/skills)
-        :param workspace_skills_dir: Workspace skills directory (e.g., workspace/skills)
-        :param extra_dirs: Additional directories to load skills from
+        1. builtin  — project root ``skills/``, shipped with the codebase
+        2. custom   — workspace ``skills/``, installed via cloud console or skill creator
+
+        Same-name custom skills override builtin ones.
+
+        :param builtin_dir: Built-in skills directory
+        :param custom_dir: Custom skills directory
         :return: Dictionary mapping skill name to SkillEntry
         """
         skill_map: Dict[str, SkillEntry] = {}
         all_diagnostics = []
-        
-        # Load from extra directories (lowest precedence)
-        if extra_dirs:
-            for extra_dir in extra_dirs:
-                if not os.path.exists(extra_dir):
-                    continue
-                result = self.load_skills_from_dir(extra_dir, source='extra')
-                all_diagnostics.extend(result.diagnostics)
-                for skill in result.skills:
-                    entry = self._create_skill_entry(skill)
-                    skill_map[skill.name] = entry
-        
-        # Load from managed directory
-        if managed_dir and os.path.exists(managed_dir):
-            result = self.load_skills_from_dir(managed_dir, source='managed')
+
+        # Load builtin skills (lower precedence)
+        if builtin_dir and os.path.exists(builtin_dir):
+            result = self.load_skills_from_dir(builtin_dir, source='builtin')
             all_diagnostics.extend(result.diagnostics)
             for skill in result.skills:
                 entry = self._create_skill_entry(skill)
                 skill_map[skill.name] = entry
-        
-        # Load from workspace directory (highest precedence)
-        if workspace_skills_dir and os.path.exists(workspace_skills_dir):
-            result = self.load_skills_from_dir(workspace_skills_dir, source='workspace')
+
+        # Load custom skills (higher precedence, overrides builtin)
+        if custom_dir and os.path.exists(custom_dir):
+            result = self.load_skills_from_dir(custom_dir, source='custom')
             all_diagnostics.extend(result.diagnostics)
             for skill in result.skills:
                 entry = self._create_skill_entry(skill)
                 skill_map[skill.name] = entry
-        
+
         # Log diagnostics
         if all_diagnostics:
             logger.debug(f"Skill loading diagnostics: {len(all_diagnostics)} issues")
-            for diag in all_diagnostics[:5]:  # Log first 5
+            for diag in all_diagnostics[:5]:
                 logger.debug(f"  - {diag}")
-        
-        logger.debug(f"Loaded {len(skill_map)} skills from all sources")
-        
+
+        logger.debug(f"Loaded {len(skill_map)} skills total")
+
         return skill_map
     
     def _create_skill_entry(self, skill: Skill) -> SkillEntry:

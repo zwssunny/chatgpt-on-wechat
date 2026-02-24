@@ -19,6 +19,12 @@ class Channel(object):
         """
         raise NotImplementedError
 
+    def stop(self):
+        """
+        stop channel gracefully, called before restart
+        """
+        pass
+
     def handle_text(self, msg):
         """
         process received msg
@@ -51,11 +57,14 @@ class Channel(object):
                 if context and "channel_type" not in context:
                     context["channel_type"] = self.channel_type
 
+                # Read on_event callback injected by the channel (e.g. web SSE)
+                on_event = context.get("on_event") if context else None
+
                 # Use agent bridge to handle the query
                 return Bridge().fetch_agent_reply(
                     query=query,
                     context=context,
-                    on_event=None,
+                    on_event=on_event,
                     clear_history=False
                 )
             except Exception as e:

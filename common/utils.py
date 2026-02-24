@@ -2,7 +2,6 @@ import io
 import os
 import re
 from urllib.parse import urlparse
-from PIL import Image
 from common.log import logger
 
 def fsize(file):
@@ -23,6 +22,7 @@ def fsize(file):
 def compress_imgfile(file, max_size):
     if fsize(file) <= max_size:
         return file
+    from PIL import Image
     file.seek(0)
     img = Image.open(file)
     rgb_image = img.convert("RGB")
@@ -76,3 +76,42 @@ def remove_markdown_symbol(text: str):
     if not text:
         return text
     return re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+
+
+def expand_path(path: str) -> str:
+    """
+    Expand user path with proper Windows support.
+    
+    On Windows, os.path.expanduser('~') may not work properly in some shells (like PowerShell).
+    This function provides a more robust path expansion.
+    
+    Args:
+        path: Path string that may contain ~
+        
+    Returns:
+        Expanded absolute path
+    """
+    if not path:
+        return path
+    
+    # Try standard expansion first
+    expanded = os.path.expanduser(path)
+    
+    # If expansion didn't work (path still starts with ~), use HOME or USERPROFILE
+    if expanded.startswith('~'):
+        import platform
+        if platform.system() == 'Windows':
+            # On Windows, try USERPROFILE first, then HOME
+            home = os.environ.get('USERPROFILE') or os.environ.get('HOME')
+        else:
+            # On Unix-like systems, use HOME
+            home = os.environ.get('HOME')
+        
+        if home:
+            # Replace ~ with home directory
+            if path == '~':
+                expanded = home
+            elif path.startswith('~/') or path.startswith('~\\'):
+                expanded = os.path.join(home, path[2:])
+    
+    return expanded
