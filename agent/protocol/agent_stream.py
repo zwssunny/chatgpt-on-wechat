@@ -201,26 +201,6 @@ class AgentStreamExecutor:
                 logger.info(f"[Agent] 第 {turn} 轮")
                 self._emit_event("turn_start", {"turn": turn})
 
-                # Check if memory flush is needed (before calling LLM)
-                # 使用独立的 flush 阈值（50K tokens 或 20 轮）
-                if self.agent.memory_manager and hasattr(self.agent, 'last_usage'):
-                    usage = self.agent.last_usage
-                    if usage and 'input_tokens' in usage:
-                        current_tokens = usage.get('input_tokens', 0)
-
-                        if self.agent.memory_manager.should_flush_memory(
-                                current_tokens=current_tokens
-                        ):
-                            self._emit_event("memory_flush_start", {
-                                "current_tokens": current_tokens,
-                                "turn_count": self.agent.memory_manager.flush_manager.turn_count
-                            })
-
-                            # TODO: Execute memory flush in background
-                            # This would require async support
-                            logger.info(
-                                f"Memory flush recommended: tokens={current_tokens}, turns={self.agent.memory_manager.flush_manager.turn_count}")
-
                 # Call LLM (enable retry_on_empty for better reliability)
                 assistant_msg, tool_calls = self._call_llm_stream(retry_on_empty=True)
                 final_response = assistant_msg
@@ -473,10 +453,6 @@ class AgentStreamExecutor:
             logger.info(f"[Agent] 🏁 完成 ({turn}轮)")
             self._emit_event("agent_end", {"final_response": final_response})
 
-            # 每轮对话结束后增加计数（用户消息+AI回复=1轮）
-            if self.agent.memory_manager:
-                self.agent.memory_manager.increment_turn()
-
         return final_response
 
     def _call_llm_stream(self, retry_on_empty=True, retry_count=0, max_retries=3,
@@ -501,7 +477,8 @@ class AgentStreamExecutor:
 
         # Prepare messages
         messages = self._prepare_messages()
-        logger.debug(f"Sending {len(messages)} messages to LLM")
+        turns = self._identify_complete_turns()
+        logger.info(f"Sending {len(messages)} messages ({len(turns)} turns) to LLM")
 
         # Prepare tool definitions (OpenAI/Claude format)
         tools_schema = None
@@ -574,7 +551,7 @@ class AgentStreamExecutor:
                         raise Exception(f"{error_msg} (Status: {status_code}, Code: {error_code}, Type: {error_type})")
 
                 # Parse chunk
-                if isinstance(chunk, dict) and "choices" in chunk:
+                if isinstance(chunk, dict) and chunk.get("choices"):
                     choice = chunk["choices"][0]
                     delta = choice.get("delta", {})
                     
@@ -636,15 +613,32 @@ class AgentStreamExecutor:
                 ])
             
             # Check if error is message format error (incomplete tool_use/tool_result pairs)
-            # This happens when previous conversation had tool failures
+            # This happens when previous conversation had tool failures or context trimming
+            # broke tool_use/tool_result pairs.
+            # Note: MiniMax returns error 2013 "tool result's tool id(...) not found" for
+            # tool_call_id mismatches — the keywords below are intentionally broad to catch
+            # both standard (Claude/OpenAI) and provider-specific (MiniMax) variants.
             is_message_format_error = any(keyword in error_str_lower for keyword in [
-                'tool_use', 'tool_result', 'without', 'immediately after',
-                'corresponding', 'must have', 'each'
-            ]) and 'status: 400' in error_str_lower
+                'tool_use', 'tool_result', 'tool result', 'without', 'immediately after',
+                'corresponding', 'must have', 'each',
+                'tool_call_id', 'tool id', 'is not found', 'not found', 'tool_calls',
+                'must be a response to a preceeding message',
+                '2013',  # MiniMax error code for tool_call_id mismatch
+            ]) and ('400' in error_str_lower or 'status: 400' in error_str_lower
+                     or 'invalid_request' in error_str_lower
+                     or 'invalidparameter' in error_str_lower)
             
             if is_context_overflow or is_message_format_error:
                 error_type = "context overflow" if is_context_overflow else "message format error"
                 logger.error(f"💥 {error_type} detected: {e}")
+
+                # Flush memory before trimming to preserve context that will be lost
+                if is_context_overflow and self.agent.memory_manager:
+                    user_id = getattr(self.agent, '_current_user_id', None)
+                    self.agent.memory_manager.flush_memory(
+                        messages=self.messages, user_id=user_id,
+                        reason="overflow", max_messages=0
+                    )
 
                 # Strategy: try aggressive trimming first, only clear as last resort
                 if is_context_overflow and not _overflow_retry:
@@ -659,9 +653,10 @@ class AgentStreamExecutor:
                         )
 
                 # Aggressive trim didn't help or this is a message format error
-                # -> clear everything
+                # -> clear everything and also purge DB to prevent reload of dirty data
                 logger.warning("🔄 Clearing conversation history to recover")
                 self.messages.clear()
+                self._clear_session_db()
                 if is_context_overflow:
                     raise Exception(
                         "抱歉，对话历史过长导致上下文溢出。我已清空历史记录，请重新描述你的需求。"
@@ -906,24 +901,55 @@ class AgentStreamExecutor:
 
     def _validate_and_fix_messages(self):
         """
-        Validate message history and fix incomplete tool_use/tool_result pairs.
-        Claude API requires each tool_use to have a corresponding tool_result immediately after.
+        Validate message history and fix broken tool_use/tool_result pairs.
+
+        Historical messages restored from DB are text-only (no tool calls),
+        so this method only needs to handle edge cases in the current session:
+        - Trailing assistant message with tool_use but no following tool_result
+          (e.g. process was interrupted mid-execution)
+        - Orphaned tool_result at the start of messages (e.g. after context
+          trimming removed the preceding assistant tool_use)
         """
         if not self.messages:
             return
-        
-        # Check last message for incomplete tool_use
-        if len(self.messages) > 0:
+
+        removed = 0
+
+        # Remove trailing incomplete tool_use assistant messages
+        while self.messages:
             last_msg = self.messages[-1]
             if last_msg.get("role") == "assistant":
-                # Check if assistant message has tool_use blocks
                 content = last_msg.get("content", [])
-                if isinstance(content, list):
-                    has_tool_use = any(block.get("type") == "tool_use" for block in content)
-                    if has_tool_use:
-                        # This is incomplete - remove it
-                        logger.warning(f"⚠️ Removing incomplete tool_use message from history")
-                        self.messages.pop()
+                if isinstance(content, list) and any(
+                    isinstance(b, dict) and b.get("type") == "tool_use"
+                    for b in content
+                ):
+                    logger.warning("⚠️ Removing trailing incomplete tool_use assistant message")
+                    self.messages.pop()
+                    removed += 1
+                    continue
+            break
+
+        # Remove leading orphaned tool_result user messages
+        while self.messages:
+            first_msg = self.messages[0]
+            if first_msg.get("role") == "user":
+                content = first_msg.get("content", [])
+                if isinstance(content, list) and any(
+                    isinstance(b, dict) and b.get("type") == "tool_result"
+                    for b in content
+                ) and not any(
+                    isinstance(b, dict) and b.get("type") == "text"
+                    for b in content
+                ):
+                    logger.warning("⚠️ Removing leading orphaned tool_result user message")
+                    self.messages.pop(0)
+                    removed += 1
+                    continue
+            break
+
+        if removed > 0:
+            logger.info(f"🔧 Message validation: removed {removed} broken message(s)")
 
     def _identify_complete_turns(self) -> List[Dict]:
         """
@@ -946,24 +972,30 @@ class AgentStreamExecutor:
             content = msg.get('content', [])
             
             if role == 'user':
-                # 检查是否是用户查询（不是工具结果）
+                # Determine if this is a real user query (not a tool_result injection
+                # or an internal hint message injected by the agent loop).
                 is_user_query = False
+                has_tool_result = False
                 if isinstance(content, list):
-                    is_user_query = any(
-                        block.get('type') == 'text' 
-                        for block in content 
-                        if isinstance(block, dict)
+                    has_text = any(
+                        isinstance(block, dict) and block.get('type') == 'text'
+                        for block in content
                     )
+                    has_tool_result = any(
+                        isinstance(block, dict) and block.get('type') == 'tool_result'
+                        for block in content
+                    )
+                    # A message with tool_result is always internal, even if it
+                    # also contains text blocks (shouldn't happen, but be safe).
+                    is_user_query = has_text and not has_tool_result
                 elif isinstance(content, str):
                     is_user_query = True
                 
                 if is_user_query:
-                    # 开始新轮次
                     if current_turn['messages']:
                         turns.append(current_turn)
                     current_turn = {'messages': [msg]}
                 else:
-                    # 工具结果，属于当前轮次
                     current_turn['messages'].append(msg)
             else:
                 # AI 回复，属于当前轮次
@@ -1157,14 +1189,28 @@ class AgentStreamExecutor:
         if not turns:
             return
         
-        # Step 2: 轮次限制 - 保留最近 N 轮
+        # Step 2: 轮次限制 - 超出时裁到 max_turns/2，批量 flush 被裁的轮次
         if len(turns) > self.max_context_turns:
-            removed_turns = len(turns) - self.max_context_turns
-            turns = turns[-self.max_context_turns:]  # 保留最近的轮次
+            keep_count = max(1, self.max_context_turns // 2)
+            removed_count = len(turns) - keep_count
+            
+            # Flush discarded turns to daily memory
+            if self.agent.memory_manager:
+                discarded_messages = []
+                for turn in turns[:removed_count]:
+                    discarded_messages.extend(turn["messages"])
+                if discarded_messages:
+                    user_id = getattr(self.agent, '_current_user_id', None)
+                    self.agent.memory_manager.flush_memory(
+                        messages=discarded_messages, user_id=user_id,
+                        reason="trim", max_messages=0
+                    )
+            
+            turns = turns[-keep_count:]
             
             logger.info(
-                f"💾 上下文轮次超限: {len(turns) + removed_turns} > {self.max_context_turns}，"
-                f"移除最早的 {removed_turns} 轮完整对话"
+                f"💾 上下文轮次超限: {keep_count + removed_count} > {self.max_context_turns}，"
+                f"裁剪至 {keep_count} 轮（移除 {removed_count} 轮）"
             )
 
         # Step 3: Token 限制 - 保留完整轮次
@@ -1201,56 +1247,59 @@ class AgentStreamExecutor:
                 logger.info(f"   重建消息列表: {old_count} -> {len(self.messages)} 条消息")
             return
 
-        # Token limit exceeded - keep complete turns from newest
+        # Token limit exceeded - keep the latest half of turns (same strategy as turn limit)
+        keep_count = max(1, len(turns) // 2)
+        removed_count = len(turns) - keep_count
+        kept_turns = turns[-keep_count:]
+        kept_tokens = sum(self._estimate_turn_tokens(t) for t in kept_turns)
+
         logger.info(
             f"🔄 上下文tokens超限: ~{current_tokens + system_tokens} > {max_tokens}，"
-            f"将按完整轮次移除最早的对话"
+            f"裁剪至 {keep_count} 轮（移除 {removed_count} 轮）"
         )
 
-        # 从最新轮次开始，反向累加（保持完整轮次）
-        kept_turns = []
-        accumulated_tokens = 0
-        min_turns = 3  # 尽量保留至少 3 轮，但不强制（避免超出 token 限制）
+        # Flush discarded turns to daily memory
+        if self.agent.memory_manager:
+            discarded_messages = []
+            for turn in turns[:removed_count]:
+                discarded_messages.extend(turn["messages"])
+            if discarded_messages:
+                user_id = getattr(self.agent, '_current_user_id', None)
+                self.agent.memory_manager.flush_memory(
+                    messages=discarded_messages, user_id=user_id,
+                    reason="trim", max_messages=0
+                )
         
-        for i, turn in enumerate(reversed(turns)):
-            turn_tokens = self._estimate_turn_tokens(turn)
-            turns_from_end = i + 1
-            
-            # 检查是否超出限制
-            if accumulated_tokens + turn_tokens <= available_tokens:
-                kept_turns.insert(0, turn)
-                accumulated_tokens += turn_tokens
-            else:
-                # 超出限制
-                # 如果还没有保留足够的轮次，且这是最后的机会，尝试保留
-                if len(kept_turns) < min_turns and turns_from_end <= min_turns:
-                    # 检查是否严重超出（超出 20% 以上则放弃）
-                    overflow_ratio = (accumulated_tokens + turn_tokens - available_tokens) / available_tokens
-                    if overflow_ratio < 0.2:  # 允许最多超出 20%
-                        kept_turns.insert(0, turn)
-                        accumulated_tokens += turn_tokens
-                        logger.debug(f"   为保留最少轮次，允许超出 {overflow_ratio*100:.1f}%")
-                        continue
-                # 停止保留更早的轮次
-                break
-        
-        # 重建消息列表
         new_messages = []
         for turn in kept_turns:
             new_messages.extend(turn['messages'])
         
         old_count = len(self.messages)
-        old_turn_count = len(turns)
         self.messages = new_messages
-        new_count = len(self.messages)
-        new_turn_count = len(kept_turns)
         
-        if old_count > new_count:
-            logger.info(
-                f"   移除了 {old_turn_count - new_turn_count} 轮对话 "
-                f"({old_count} -> {new_count} 条消息，"
-                f"~{current_tokens + system_tokens} -> ~{accumulated_tokens + system_tokens} tokens)"
-            )
+        logger.info(
+            f"   移除了 {removed_count} 轮对话 "
+            f"({old_count} -> {len(self.messages)} 条消息，"
+            f"~{current_tokens + system_tokens} -> ~{kept_tokens + system_tokens} tokens)"
+        )
+
+    def _clear_session_db(self):
+        """
+        Clear the current session's persisted messages from SQLite DB.
+
+        This prevents dirty data (broken tool_use/tool_result pairs) from being
+        reloaded on the next request or after a restart.
+        """
+        try:
+            session_id = getattr(self.agent, '_current_session_id', None)
+            if not session_id:
+                return
+            from agent.memory import get_conversation_store
+            store = get_conversation_store()
+            store.clear_session(session_id)
+            logger.info(f"🗑️ Cleared dirty session data from DB: {session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to clear session DB: {e}")
 
     def _prepare_messages(self) -> List[Dict[str, Any]]:
         """

@@ -115,11 +115,135 @@ class AgentInitializer:
             runtime_info=runtime_info  # Pass runtime_info for dynamic time updates
         )
         
-        # Attach memory manager
+        # Attach memory manager and share LLM model for summarization
         if memory_manager:
             agent.memory_manager = memory_manager
-        
+            if hasattr(agent, 'model') and agent.model:
+                memory_manager.flush_manager.llm_model = agent.model
+
+        # Restore persisted conversation history for this session
+        if session_id:
+            self._restore_conversation_history(agent, session_id)
+
+        # Start daily memory flush timer (once, on first agent init regardless of session)
+        self._start_daily_flush_timer()
+
         return agent
+
+    def _restore_conversation_history(self, agent, session_id: str) -> None:
+        """
+        Load persisted conversation messages from SQLite and inject them
+        into the agent's in-memory message list.
+
+        Only user text and assistant text are restored. Tool call chains
+        (tool_use / tool_result) are stripped out because:
+        1. They are intermediate process, the value is already in the final
+           assistant text reply.
+        2. They consume massive context tokens (often 80%+ of history).
+        3. Different models have incompatible tool message formats, so
+           restoring tool chains across model switches causes 400 errors.
+        4. Eliminates the entire class of tool_use/tool_result pairing bugs.
+        """
+        from config import conf
+        if not conf().get("conversation_persistence", True):
+            return
+
+        try:
+            from agent.memory import get_conversation_store
+            store = get_conversation_store()
+            max_turns = conf().get("agent_max_context_turns", 20)
+            restore_turns = max(3, max_turns // 6)
+            saved = store.load_messages(session_id, max_turns=restore_turns)
+            if saved:
+                filtered = self._filter_text_only_messages(saved)
+                if filtered:
+                    with agent.messages_lock:
+                        agent.messages = filtered
+                    logger.debug(
+                        f"[AgentInitializer] Restored {len(filtered)} text messages "
+                        f"(from {len(saved)} total, {restore_turns} turns cap) "
+                        f"for session={session_id}"
+                    )
+        except Exception as e:
+            logger.warning(
+                f"[AgentInitializer] Failed to restore conversation history for "
+                f"session={session_id}: {e}"
+            )
+
+    @staticmethod
+    def _filter_text_only_messages(messages: list) -> list:
+        """
+        Extract clean user/assistant turn pairs from raw message history.
+
+        Groups messages into turns (each starting with a real user query),
+        then keeps only:
+        - The first user text in each turn (the actual user input)
+        - The last assistant text in each turn (the final answer)
+
+        All tool_use, tool_result, intermediate assistant thoughts, and
+        internal hint messages injected by the agent loop are discarded.
+        """
+
+        def _extract_text(content) -> str:
+            if isinstance(content, str):
+                return content.strip()
+            if isinstance(content, list):
+                parts = [
+                    b.get("text", "")
+                    for b in content
+                    if isinstance(b, dict) and b.get("type") == "text"
+                ]
+                return "\n".join(p for p in parts if p).strip()
+            return ""
+
+        def _is_real_user_msg(msg: dict) -> bool:
+            """True for actual user input, False for tool_result or internal hints."""
+            if msg.get("role") != "user":
+                return False
+            content = msg.get("content")
+            if isinstance(content, list):
+                has_tool_result = any(
+                    isinstance(b, dict) and b.get("type") == "tool_result"
+                    for b in content
+                )
+                if has_tool_result:
+                    return False
+            text = _extract_text(content)
+            return bool(text)
+
+        # Group into turns: each turn starts with a real user message
+        turns = []
+        current_turn = None
+        for msg in messages:
+            if _is_real_user_msg(msg):
+                if current_turn is not None:
+                    turns.append(current_turn)
+                current_turn = {"user": msg, "assistants": []}
+            elif current_turn is not None and msg.get("role") == "assistant":
+                text = _extract_text(msg.get("content"))
+                if text:
+                    current_turn["assistants"].append(text)
+        if current_turn is not None:
+            turns.append(current_turn)
+
+        # Build result: one user msg + one assistant msg per turn
+        filtered = []
+        for turn in turns:
+            user_text = _extract_text(turn["user"].get("content"))
+            if not user_text:
+                continue
+            filtered.append({
+                "role": "user",
+                "content": [{"type": "text", "text": user_text}]
+            })
+            if turn["assistants"]:
+                final_reply = turn["assistants"][-1]
+                filtered.append({
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": final_reply}]
+                })
+
+        return filtered
     
     def _load_env_file(self):
         """Load environment variables from .env file"""
@@ -283,7 +407,14 @@ class AgentInitializer:
                         tool.scheduler_service = scheduler_service
                         if not tool.config:
                             tool.config = {}
-                        tool.config["channel_type"] = conf().get("channel_type", "unknown")
+                        raw_ct = conf().get("channel_type", "unknown")
+                        if isinstance(raw_ct, list):
+                            ct = raw_ct[0] if raw_ct else "unknown"
+                        elif isinstance(raw_ct, str) and "," in raw_ct:
+                            ct = raw_ct.split(",")[0].strip()
+                        else:
+                            ct = raw_ct
+                        tool.config["channel_type"] = ct
             except Exception as e:
                 logger.warning(f"[AgentInitializer] Failed to inject scheduler dependencies: {e}")
     
@@ -330,7 +461,7 @@ class AgentInitializer:
         return {
             "model": conf().get("model", "unknown"),
             "workspace": workspace_root,
-            "channel": conf().get("channel_type", "unknown"),
+            "channel": ", ".join(conf().get("channel_type")) if isinstance(conf().get("channel_type"), list) else conf().get("channel_type", "unknown"),
             "_get_current_time": get_current_time  # Dynamic time function
         }
     
@@ -388,3 +519,59 @@ class AgentInitializer:
                 logger.info(f"[AgentInitializer] Migrated {len(keys_to_migrate)} API keys to .env: {list(keys_to_migrate.keys())}")
             except Exception as e:
                 logger.warning(f"[AgentInitializer] Failed to migrate API keys: {e}")
+
+    def _start_daily_flush_timer(self):
+        """Start a background thread that flushes all agents' memory daily at 23:55."""
+        if getattr(self.agent_bridge, '_daily_flush_started', False):
+            return
+        self.agent_bridge._daily_flush_started = True
+
+        import threading
+
+        def _daily_flush_loop():
+            while True:
+                try:
+                    now = datetime.datetime.now()
+                    target = now.replace(hour=23, minute=55, second=0, microsecond=0)
+                    if target <= now:
+                        target += datetime.timedelta(days=1)
+                    wait_seconds = (target - now).total_seconds()
+                    logger.info(f"[DailyFlush] Next flush at {target.strftime('%Y-%m-%d %H:%M')} (in {wait_seconds/3600:.1f}h)")
+                    time.sleep(wait_seconds)
+
+                    self._flush_all_agents()
+                except Exception as e:
+                    logger.warning(f"[DailyFlush] Error in daily flush loop: {e}")
+                    time.sleep(3600)
+
+        t = threading.Thread(target=_daily_flush_loop, daemon=True)
+        t.start()
+
+    def _flush_all_agents(self):
+        """Flush memory for all active agent sessions."""
+        agents = []
+        if self.agent_bridge.default_agent:
+            agents.append(("default", self.agent_bridge.default_agent))
+        for sid, agent in self.agent_bridge.agents.items():
+            agents.append((sid, agent))
+
+        if not agents:
+            return
+
+        flushed = 0
+        for label, agent in agents:
+            try:
+                if not agent.memory_manager:
+                    continue
+                with agent.messages_lock:
+                    messages = list(agent.messages)
+                if not messages:
+                    continue
+                result = agent.memory_manager.flush_manager.create_daily_summary(messages)
+                if result:
+                    flushed += 1
+            except Exception as e:
+                logger.warning(f"[DailyFlush] Failed for session {label}: {e}")
+
+        if flushed:
+            logger.info(f"[DailyFlush] Flushed {flushed}/{len(agents)} agent session(s)")

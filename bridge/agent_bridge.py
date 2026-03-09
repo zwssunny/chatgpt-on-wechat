@@ -65,30 +65,67 @@ class AgentLLMModel(LLMModel):
     LLM Model adapter that uses COW's existing bot infrastructure
     """
 
+    _MODEL_BOT_TYPE_MAP = {
+        "wenxin": const.BAIDU, "wenxin-4": const.BAIDU,
+        "xunfei": const.XUNFEI, const.QWEN: const.QWEN,
+        const.MODELSCOPE: const.MODELSCOPE,
+    }
+    _MODEL_PREFIX_MAP = [
+        ("qwen", const.QWEN_DASHSCOPE), ("qwq", const.QWEN_DASHSCOPE), ("qvq", const.QWEN_DASHSCOPE),
+        ("gemini", const.GEMINI), ("glm", const.ZHIPU_AI), ("claude", const.CLAUDEAPI),
+        ("moonshot", const.MOONSHOT), ("kimi", const.MOONSHOT),
+        ("doubao", const.DOUBAO),
+    ]
+
     def __init__(self, bridge: Bridge, bot_type: str = "chat"):
-        # Get model name directly from config
         from config import conf
-        model_name = conf().get("model", const.GPT_41)
-        super().__init__(model=model_name)
+        super().__init__(model=conf().get("model", const.GPT_41))
         self.bridge = bridge
         self.bot_type = bot_type
         self._bot = None
-        self._use_linkai = conf().get("use_linkai", False) and conf().get("linkai_api_key")
-    
+        self._bot_model = None
+
+    @property
+    def model(self):
+        from config import conf
+        return conf().get("model", const.GPT_41)
+
+    @model.setter
+    def model(self, value):
+        pass
+
+    def _resolve_bot_type(self, model_name: str) -> str:
+        """Resolve bot type from model name, matching Bridge.__init__ logic."""
+        from config import conf
+        if conf().get("use_linkai", False) and conf().get("linkai_api_key"):
+            return const.LINKAI
+        if not model_name or not isinstance(model_name, str):
+            return const.CHATGPT
+        if model_name in self._MODEL_BOT_TYPE_MAP:
+            return self._MODEL_BOT_TYPE_MAP[model_name]
+        if model_name.lower().startswith("minimax") or model_name in ["abab6.5-chat"]:
+            return const.MiniMax
+        if model_name in [const.QWEN_TURBO, const.QWEN_PLUS, const.QWEN_MAX]:
+            return const.QWEN_DASHSCOPE
+        if model_name in [const.MOONSHOT, "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"]:
+            return const.MOONSHOT
+        if model_name in [const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER]:
+            return const.CHATGPT
+        for prefix, btype in self._MODEL_PREFIX_MAP:
+            if model_name.startswith(prefix):
+                return btype
+        return const.CHATGPT
+
     @property
     def bot(self):
-        """Lazy load the bot and enhance it with tool calling if needed"""
-        if self._bot is None:
-            # If use_linkai is enabled, use LinkAI bot directly
-            if self._use_linkai:
-                self._bot = self.bridge.find_chat_bot(const.LINKAI)
-            else:
-                self._bot = self.bridge.get_bot(self.bot_type)
-                # Automatically add tool calling support if not present
-                self._bot = add_openai_compatible_support(self._bot)
-            
-            # Log bot info
-            bot_name = type(self._bot).__name__
+        """Lazy load the bot, re-create when model changes"""
+        from models.bot_factory import create_bot
+        cur_model = self.model
+        if self._bot is None or self._bot_model != cur_model:
+            bot_type = self._resolve_bot_type(cur_model)
+            self._bot = create_bot(bot_type)
+            self._bot = add_openai_compatible_support(self._bot)
+            self._bot_model = cur_model
         return self._bot
 
     def call(self, request: LLMRequest):
@@ -135,7 +172,7 @@ class AgentLLMModel(LLMModel):
                 # Use tool-enabled streaming call if available
                 # Extract system prompt if present
                 system_prompt = getattr(request, 'system', None)
-                
+
                 # Build kwargs for call_with_tools
                 kwargs = {
                     'messages': request.messages,
@@ -143,15 +180,20 @@ class AgentLLMModel(LLMModel):
                     'stream': True,
                     'model': self.model  # Pass model parameter
                 }
-                
+
                 # Only pass max_tokens if explicitly set, let the bot use its default
                 if request.max_tokens is not None:
                     kwargs['max_tokens'] = request.max_tokens
-                
+
                 # Add system prompt if present
                 if system_prompt:
                     kwargs['system'] = system_prompt
-                
+
+                # Pass channel_type for linkai tracking
+                channel_type = getattr(self, 'channel_type', None)
+                if channel_type:
+                    kwargs['channel_type'] = channel_type
+
                 stream = self.bot.call_with_tools(**kwargs)
                 
                 # Convert stream format to our expected format
@@ -290,9 +332,10 @@ class AgentBridge:
         Returns:
             Reply object
         """
+        session_id = None
+        agent = None
         try:
             # Extract session_id from context for user isolation
-            session_id = None
             if context:
                 session_id = context.kwargs.get("session_id") or context.get("session_id")
             
@@ -325,6 +368,13 @@ class AgentBridge:
                                 logger.warning(f"[AgentBridge] Failed to attach context to scheduler: {e}")
                             break
             
+            # Pass channel_type to model so linkai requests carry it
+            if context and hasattr(agent, 'model'):
+                agent.model.channel_type = context.get("channel_type", "")
+
+            # Store session_id on agent so executor can clear DB on fatal errors
+            agent._current_session_id = session_id
+
             try:
                 # Use agent's run_stream method with event handler
                 response = agent.run_stream(
@@ -336,9 +386,26 @@ class AgentBridge:
                 # Restore original tools
                 if context and context.get("is_scheduled_task"):
                     agent.tools = original_tools
-                
+
                 # Log execution summary
                 event_handler.log_summary()
+
+            # Persist new messages generated during this run
+            if session_id:
+                channel_type = (context.get("channel_type") or "") if context else ""
+                new_messages = getattr(agent, '_last_run_new_messages', [])
+                if new_messages:
+                    self._persist_messages(session_id, list(new_messages), channel_type)
+                else:
+                    with agent.messages_lock:
+                        msg_count = len(agent.messages)
+                    if msg_count == 0:
+                        try:
+                            from agent.memory import get_conversation_store
+                            get_conversation_store().clear_session(session_id)
+                            logger.info(f"[AgentBridge] Cleared DB for recovered session: {session_id}")
+                        except Exception as e:
+                            logger.warning(f"[AgentBridge] Failed to clear DB after recovery: {e}")
             
             # Check if there are files to send (from read tool)
             if hasattr(agent, 'stream_executor') and hasattr(agent.stream_executor, 'files_to_send'):
@@ -358,6 +425,18 @@ class AgentBridge:
             
         except Exception as e:
             logger.error(f"Agent reply error: {e}")
+            # If the agent cleared its messages due to format error / overflow,
+            # also purge the DB so the next request starts clean.
+            if session_id and agent:
+                try:
+                    with agent.messages_lock:
+                        msg_count = len(agent.messages)
+                    if msg_count == 0:
+                        from agent.memory import get_conversation_store
+                        get_conversation_store().clear_session(session_id)
+                        logger.info(f"[AgentBridge] Cleared DB for session after error: {session_id}")
+                except Exception as db_err:
+                    logger.warning(f"[AgentBridge] Failed to clear DB after error: {db_err}")
             return Reply(ReplyType.ERROR, f"Agent error: {str(e)}")
     
     def _create_file_reply(self, file_info: dict, text_response: str, context: Context = None) -> Reply:
@@ -475,6 +554,32 @@ class AgentBridge:
             except Exception as e:
                 logger.warning(f"[AgentBridge] Failed to migrate API keys: {e}")
     
+    def _persist_messages(
+        self, session_id: str, new_messages: list, channel_type: str = ""
+    ) -> None:
+        """
+        Persist new messages to the conversation store after each agent run.
+
+        Failures are logged but never propagate — they must not interrupt replies.
+        """
+        if not new_messages:
+            return
+        try:
+            from config import conf
+            if not conf().get("conversation_persistence", True):
+                return
+        except Exception:
+            pass
+        try:
+            from agent.memory import get_conversation_store
+            get_conversation_store().append_messages(
+                session_id, new_messages, channel_type=channel_type
+            )
+        except Exception as e:
+            logger.warning(
+                f"[AgentBridge] Failed to persist messages for session={session_id}: {e}"
+            )
+
     def clear_session(self, session_id: str):
         """
         Clear a specific session's agent and conversation history

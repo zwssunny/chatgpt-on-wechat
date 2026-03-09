@@ -118,6 +118,10 @@ class Agent:
         if self.runtime_info and callable(self.runtime_info.get('_get_current_time')):
             prompt = self._rebuild_runtime_section(prompt)
 
+        # Rebuild skills section to pick up newly installed/removed skills
+        if self.skill_manager:
+            prompt = self._rebuild_skills_section(prompt)
+
         return prompt
     
     def _rebuild_runtime_section(self, prompt: str) -> str:
@@ -168,6 +172,39 @@ class Agent:
         except Exception as e:
             logger.warning(f"Failed to rebuild runtime section: {e}")
             return prompt
+
+    def _rebuild_skills_section(self, prompt: str) -> str:
+        """
+        Rebuild the <available_skills> block so that newly installed or
+        removed skills are reflected without re-creating the agent.
+        """
+        try:
+            import re
+            self.skill_manager.refresh_skills()
+            new_skills_xml = self.skill_manager.build_skills_prompt()
+
+            old_block_pattern = r'<available_skills>.*?</available_skills>'
+            has_old_block = re.search(old_block_pattern, prompt, flags=re.DOTALL)
+
+            # Extract the new <available_skills>...</available_skills> tag from the prompt
+            new_block = ""
+            if new_skills_xml and new_skills_xml.strip():
+                m = re.search(old_block_pattern, new_skills_xml, flags=re.DOTALL)
+                if m:
+                    new_block = m.group(0)
+
+            if has_old_block:
+                replacement = new_block or "<available_skills>\n</available_skills>"
+                prompt = re.sub(old_block_pattern, replacement, prompt, flags=re.DOTALL)
+            elif new_block:
+                skills_header = "以下是可用技能："
+                idx = prompt.find(skills_header)
+                if idx != -1:
+                    insert_pos = idx + len(skills_header)
+                    prompt = prompt[:insert_pos] + "\n" + new_block + prompt[insert_pos:]
+        except Exception as e:
+            logger.warning(f"Failed to rebuild skills section: {e}")
+        return prompt
 
     def _rebuild_tool_list_section(self, prompt: str) -> str:
         """
@@ -480,7 +517,7 @@ class Agent:
 
         # Get max_context_turns from config
         from config import conf
-        max_context_turns = conf().get("agent_max_context_turns", 30)
+        max_context_turns = conf().get("agent_max_context_turns", 20)
         
         # Create stream executor with copied message history
         executor = AgentStreamExecutor(
@@ -507,11 +544,15 @@ class Agent:
                     logger.info("[Agent] Cleared Agent message history after executor recovery")
             raise
 
-        # Append only the NEW messages from this execution (thread-safe)
-        # This allows concurrent requests to both contribute to history
+        # Sync executor's messages back to agent (thread-safe).
+        # If the executor trimmed context, its message list is shorter than
+        # original_length, so we must replace rather than append.
         with self.messages_lock:
-            new_messages = executor.messages[original_length:]
-            self.messages.extend(new_messages)
+            self.messages = list(executor.messages)
+            # Track messages added in this run (user query + all assistant/tool messages)
+            # original_length may exceed executor.messages length after trimming
+            trim_adjusted_start = min(original_length, len(executor.messages))
+            self._last_run_new_messages = list(executor.messages[trim_adjusted_start:])
         
         # Store executor reference for agent_bridge to access files_to_send
         self.stream_executor = executor

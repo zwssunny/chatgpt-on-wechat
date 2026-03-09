@@ -1,14 +1,21 @@
 <p align="center"><img src= "https://github.com/user-attachments/assets/eca9a9ec-8534-4615-9e0f-96c5ac1d10a3" alt="Chatgpt-on-Wechat" width="550" /></p>
 
 <p align="center">
-   <a href="https://github.com/zhayujie/chatgpt-on-wechat/releases/latest"><img src="https://img.shields.io/github/v/release/zhayujie/chatgpt-on-wechat" alt="Latest release"></a>
+  <a href="https://github.com/zhayujie/chatgpt-on-wechat/releases/latest"><img src="https://img.shields.io/github/v/release/zhayujie/chatgpt-on-wechat" alt="Latest release"></a>
   <a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/LICENSE"><img src="https://img.shields.io/github/license/zhayujie/chatgpt-on-wechat" alt="License: MIT"></a>
   <a href="https://github.com/zhayujie/chatgpt-on-wechat"><img src="https://img.shields.io/github/stars/zhayujie/chatgpt-on-wechat?style=flat-square" alt="Stars"></a> <br/>
+  [中文] | [<a href="docs/en/README.md">English</a>]
 </p>
 
 **CowAgent** 是基于大模型的超级AI助理，能够主动思考和任务规划、操作计算机和外部资源、创造和执行Skills、拥有长期记忆并不断成长。CowAgent 支持灵活切换多种模型，能处理文本、语音、图片、文件等多模态消息，可接入网页、飞书、钉钉、企业微信应用、微信公众号中使用，7*24小时运行于你的个人电脑或服务器中。
 
-📖能力介绍：[CowAgent 2.0](/docs/agent.md)
+<p align="center">
+  <a href="https://cowagent.ai/">🌐 官网</a> &nbsp;·&nbsp;
+  <a href="https://docs.cowagent.ai/">📖 文档中心</a> &nbsp;·&nbsp;
+  <a href="https://docs.cowagent.ai/guide/quick-start">🚀 快速开始</a>
+</p>
+
+
 
 # 简介
 
@@ -24,12 +31,13 @@
 
 ## 声明
 
-1. 本项目遵循 [MIT开源协议](/LICENSE)，主要用于技术研究和学习，使用本项目时需遵守所在地法律法规、相关政策以及企业章程，禁止用于任何违法或侵犯他人权益的行为。任何个人、团队和企业，无论以何种方式使用该项目、对何对象提供服务，所产生的一切后果，本项目均不承担任何责任
-2. 成本与安全：Agent模式下Token使用量高于普通对话模式，请根据效果及成本综合选择模型。Agent具有访问所在操作系统的能力，请谨慎选择项目部署环境。同时项目也会持续升级安全机制、并降低模型消耗成本
+1. 本项目遵循 [MIT开源协议](/LICENSE)，主要用于技术研究和学习，使用本项目时需遵守所在地法律法规、相关政策以及企业章程，禁止用于任何违法或侵犯他人权益的行为。任何个人、团队和企业，无论以何种方式使用该项目、对何对象提供服务，所产生的一切后果，本项目均不承担任何责任。
+2. 成本与安全：Agent模式下Token使用量高于普通对话模式，请根据效果及成本综合选择模型。Agent具有访问所在操作系统的能力，请谨慎选择项目部署环境。同时项目也会持续升级安全机制、并降低模型消耗成本。
+3. CowAgent项目专注于开源技术开发，不会参与、授权或发行任何加密货币。
 
 ## 演示
 
-使用说明(Agent模式)：[CowAgent介绍](/docs/agent.md)
+使用说明(Agent模式)：[CowAgent介绍](https://docs.cowagent.ai/intro/features)
 
 DEMO视频(对话模式)：https://cdn.link-ai.tech/doc/cow_demo.mp4
 
@@ -57,17 +65,17 @@ DEMO视频(对话模式)：https://cdn.link-ai.tech/doc/cow_demo.mp4
 
 # 🏷 更新日志
 
+>**2026.02.27：** [2.0.2版本](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/2.0.2)，Web 控制台全面升级（流式对话、模型/技能/记忆/通道/定时任务/日志管理）、支持多通道同时运行、会话持久化存储、新增多个模型。
+
+>**2026.02.13：** [2.0.1版本](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/2.0.1)，内置 Web Search 工具、智能上下文裁剪策略、运行时信息动态更新、Windows 兼容性适配，修复定时任务记忆丢失、飞书连接等多项问题。
+
 >**2026.02.03：** [2.0.0版本](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/2.0.0)，正式升级为超级Agent助理，支持多轮任务决策、具备长期记忆、实现多种系统工具、支持Skills框架，新增多种模型并优化了接入渠道。
 
 >**2025.05.23：** [1.7.6版本](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/1.7.6) 优化web网页channel、新增 [AgentMesh](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/plugins/agent/README.md)多智能体插件、百度语音合成优化、企微应用`access_token`获取优化、支持`claude-4-sonnet`和`claude-4-opus`模型
 
 >**2025.04.11：** [1.7.5版本](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/1.7.5) 新增支持 [wechatferry](https://github.com/zhayujie/chatgpt-on-wechat/pull/2562) 协议、新增 deepseek 模型、新增支持腾讯云语音能力、新增支持 ModelScope 和 Gitee-AI API接口
 
->**2024.12.13：** [1.7.4版本](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/1.7.4) 新增 Gemini 2.0 模型、新增web channel、解决内存泄漏问题、解决 `#reloadp` 命令重载不生效问题
-
->**2024.10.31：** [1.7.3版本](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/1.7.3) 程序稳定性提升、数据库功能、Claude模型优化、linkai插件优化、离线通知
-
-更多更新历史请查看: [更新日志](/docs/release/history.md)
+更多更新历史请查看: [更新日志](https://docs.cowagent.ai/releases)
 
 <br/>
 
@@ -81,7 +89,7 @@ DEMO视频(对话模式)：https://cdn.link-ai.tech/doc/cow_demo.mp4
 bash <(curl -sS https://cdn.link-ai.tech/code/cow/run.sh)
 ```
 
-脚本使用说明：[一键运行脚本](https://github.com/zhayujie/chatgpt-on-wechat/wiki/CowAgentQuickStart)
+脚本使用说明：[一键运行脚本](https://docs.cowagent.ai/guide/quick-start)
 
 
 ## 一、准备
@@ -90,7 +98,7 @@ bash <(curl -sS https://cdn.link-ai.tech/code/cow/run.sh)
 
 项目支持国内外主流厂商的模型接口，可选模型及配置说明参考：[模型说明](#模型说明)。
 
-> 注：Agent模式下推荐使用以下模型，可根据效果及成本综合选择：MiniMax-M2.5、glm-5、kimi-k2.5、qwen3.5-plus、claude-sonnet-4-6、gemini-3.1-pro-preview
+> 注：Agent模式下推荐使用以下模型，可根据效果及成本综合选择：MiniMax-M2.5、glm-5、kimi-k2.5、qwen3.5-plus、claude-sonnet-4-6、gemini-3.1-pro-preview、gpt-5.4
 
 同时支持使用 **LinkAI平台** 接口，可灵活切换 OpenAI、Claude、Gemini、DeepSeek、Qwen、Kimi 等多种常用模型，并支持知识库、工作流、插件等Agent能力，参考 [接口文档](https://docs.link-ai.tech/platform/api)。
 
@@ -271,14 +279,14 @@ volumes:
 
 ```json
 {
-    "model": "gpt-4.1-mini",
+    "model": "gpt-5.4",
     "open_ai_api_key": "YOUR_API_KEY",
     "open_ai_api_base": "https://api.openai.com/v1",
     "bot_type": "chatGPT"
 }
 ```
 
- - `model`: 与OpenAI接口的 [model参数](https://platform.openai.com/docs/models) 一致，支持包括 o系列、gpt-5.2、gpt-5.1、gpt-4.1等系列模型
+ - `model`: 与OpenAI接口的 [model参数](https://platform.openai.com/docs/models) 一致，支持包括 gpt-5.4、o系列、gpt-4.1等模型，Agent模式推荐使用 `gpt-5.4`
  - `open_ai_api_base`: 如果需要接入第三方代理接口，可通过修改该参数进行接入
  - `bot_type`: 使用OpenAI相关模型时无需填写。当使用第三方代理接口接入Claude等非OpenAI官方模型时，该参数设为 `chatGPT`
 </details>
@@ -607,10 +615,12 @@ API Key创建：在 [控制台](https://aistudio.google.com/app/apikey?hl=zh-cn)
 
 以下对可接入通道的配置方式进行说明，应用通道代码在项目的 `channel/` 目录下。
 
+支持同时可接入多个通道，配置时可通过逗号进行分割，例如 `"channel_type": "feishu,dingtalk"`。
+
 <details>
 <summary>1. Web</summary>
 
-项目启动后默认运行Web通道，配置如下：
+项目启动后会默认运行Web控制台，配置如下：
 
 ```json
 {
@@ -656,7 +666,7 @@ API Key创建：在 [控制台](https://aistudio.google.com/app/apikey?hl=zh-cn)
 - `feishu_event_mode`: 事件接收模式，`websocket`（推荐）或 `webhook`
 - WebSocket 模式需安装依赖：`pip3 install lark-oapi`
 
-详细步骤和参数说明参考 [飞书接入](https://docs.link-ai.tech/cow/multi-platform/feishu)
+详细步骤和参数说明参考 [飞书接入](https://docs.cowagent.ai/channels/feishu)
 
 </details>
 
@@ -672,7 +682,7 @@ API Key创建：在 [控制台](https://aistudio.google.com/app/apikey?hl=zh-cn)
     "dingtalk_client_secret": "CLIENT_SECRET"
 }
 ```
-详细步骤和参数说明参考 [钉钉接入](https://docs.link-ai.tech/cow/multi-platform/dingtalk)
+详细步骤和参数说明参考 [钉钉接入](https://docs.cowagent.ai/channels/dingtalk)
 </details>
 
 <details>
@@ -691,7 +701,7 @@ API Key创建：在 [控制台](https://aistudio.google.com/app/apikey?hl=zh-cn)
     "wechatcomapp_aes_key": "AESKEY"
 }
 ```
-详细步骤和参数说明参考 [企微自建应用接入](https://docs.link-ai.tech/cow/multi-platform/wechat-com)
+详细步骤和参数说明参考 [企微自建应用接入](https://docs.cowagent.ai/channels/wecom)
 
 </details>
 
@@ -726,7 +736,7 @@ API Key创建：在 [控制台](https://aistudio.google.com/app/apikey?hl=zh-cn)
 }
 ```
 
-详细步骤和参数说明参考 [微信公众号接入](https://docs.link-ai.tech/cow/multi-platform/wechat-mp)
+详细步骤和参数说明参考 [微信公众号接入](https://docs.cowagent.ai/channels/wechatmp)
 
 </details>
 
