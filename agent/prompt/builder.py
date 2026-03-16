@@ -42,7 +42,6 @@ class PromptBuilder:
         skill_manager: Any = None,
         memory_manager: Any = None,
         runtime_info: Optional[Dict[str, Any]] = None,
-        is_first_conversation: bool = False,
         **kwargs
     ) -> str:
         """
@@ -52,11 +51,10 @@ class PromptBuilder:
             base_persona: 基础人格描述（会被context_files中的AGENT.md覆盖）
             user_identity: 用户身份信息
             tools: 工具列表
-            context_files: 上下文文件列表（AGENT.md, USER.md, RULE.md等）
+            context_files: 上下文文件列表（AGENT.md, USER.md, RULE.md, BOOTSTRAP.md等）
             skill_manager: 技能管理器
             memory_manager: 记忆管理器
             runtime_info: 运行时信息
-            is_first_conversation: 是否为首次对话
             **kwargs: 其他参数
             
         Returns:
@@ -72,7 +70,6 @@ class PromptBuilder:
             skill_manager=skill_manager,
             memory_manager=memory_manager,
             runtime_info=runtime_info,
-            is_first_conversation=is_first_conversation,
             **kwargs
         )
 
@@ -87,7 +84,6 @@ def build_agent_system_prompt(
     skill_manager: Any = None,
     memory_manager: Any = None,
     runtime_info: Optional[Dict[str, Any]] = None,
-    is_first_conversation: bool = False,
     **kwargs
 ) -> str:
     """
@@ -99,7 +95,7 @@ def build_agent_system_prompt(
     3. 记忆系统 - 独立的记忆能力
     4. 工作空间 - 工作环境说明
     5. 用户身份 - 用户信息（可选）
-    6. 项目上下文 - AGENT.md, USER.md, RULE.md（定义人格、身份、规则）
+    6. 项目上下文 - AGENT.md, USER.md, RULE.md, BOOTSTRAP.md（定义人格、身份、规则、初始化引导）
     7. 运行时信息 - 元信息（时间、模型等）
     
     Args:
@@ -112,7 +108,6 @@ def build_agent_system_prompt(
         skill_manager: 技能管理器
         memory_manager: 记忆管理器
         runtime_info: 运行时信息
-        is_first_conversation: 是否为首次对话
         **kwargs: 其他参数
         
     Returns:
@@ -133,7 +128,7 @@ def build_agent_system_prompt(
         sections.extend(_build_memory_section(memory_manager, tools, language))
     
     # 4. 工作空间（工作环境说明）
-    sections.extend(_build_workspace_section(workspace_dir, language, is_first_conversation))
+    sections.extend(_build_workspace_section(workspace_dir, language))
     
     # 5. 用户身份（如果有）
     if user_identity:
@@ -175,7 +170,7 @@ def _build_tooling_section(tools: List[Any], language: str) -> List[str]:
         "memory_get": "读取记忆内容",
         "env_config": "管理API密钥和技能配置",
         "scheduler": "管理定时任务和提醒",
-        "send": "发送文件给用户",
+        "send": "发送本地文件给用户（仅限本地文件，URL直接放在回复文本中）",
     }
 
     # Preferred display order
@@ -214,7 +209,7 @@ def _build_tooling_section(tools: List[Any], language: str) -> List[str]:
         "- 在多步骤任务、敏感操作或用户要求时简要解释决策过程",
         "- 持续推进直到任务完成，完成后向用户报告结果。",
         "- 回复中涉及密钥、令牌等敏感信息必须脱敏。",
-        "- URL链接可直接以文本形式发送",
+        "- URL链接直接放在回复文本中即可，系统会自动处理和渲染。无需下载后使用send工具发送",
         "",
     ]
 
@@ -238,13 +233,15 @@ def _build_skills_section(skill_manager: Any, tools: Optional[List[Any]], langua
     lines = [
         "## 技能系统（mandatory）",
         "",
-        "在回复之前：扫描下方 <available_skills> 中的 <description> 条目。",
+        "在回复之前：扫描下方 <available_skills> 中每个技能的 <description>。",
         "",
-        f"- 如果恰好有一个技能(Skill)明确适用：使用 `{read_tool_name}` 读取其 <location> 处的 SKILL.md，然后严格遵循它",
-        "- 如果多个技能都适用则选择最匹配的一个，如果没有明确适用的则不要读取任何 SKILL.md",
-        "- 读取 SKILL.md 后直接按其指令执行，无需多余的预检查",
+        f"- 如果有技能的描述与用户需求匹配：使用 `{read_tool_name}` 工具读取其 <location> 路径的 SKILL.md 文件，然后严格遵循文件中的指令。"
+        "当有匹配的技能时，应优先使用技能",
+        "- 如果多个技能都适用则选择最匹配的一个，然后读取并遵循。",
+        "- 如果没有技能明确适用：不要读取任何 SKILL.md，直接使用通用工具。",
         "",
-        "**注意**: 永远不要一次性读取多个技能，只在选择后再读取。技能和工具不同，必须先读取其SKILL.md并按照文件内容运行。",
+        f"**重要**: 技能不是工具，不能直接调用。使用技能的唯一方式是用 `{read_tool_name}` 读取 SKILL.md 文件，然后按文件内容操作。"
+        "永远不要一次性读取多个技能，只在选择后再读取。",
         "",
         "以下是可用技能："
     ]
@@ -352,7 +349,7 @@ def _build_docs_section(workspace_dir: str, language: str) -> List[str]:
     return []
 
 
-def _build_workspace_section(workspace_dir: str, language: str, is_first_conversation: bool = False) -> List[str]:
+def _build_workspace_section(workspace_dir: str, language: str) -> List[str]:
     """构建工作空间section"""
     lines = [
         "## 工作空间",
@@ -379,8 +376,8 @@ def _build_workspace_section(workspace_dir: str, language: str, is_first_convers
         "",
         "以下文件在会话启动时**已经自动加载**到系统提示词的「项目上下文」section 中，你**无需再用 read 工具读取它们**：",
         "",
-        "- ✅ `AGENT.md`: 已加载 - 你的人格和灵魂设定",
-        "- ✅ `USER.md`: 已加载 - 用户的身份信息",
+        "- ✅ `AGENT.md`: 已加载 - 你的人格和灵魂设定。当用户修改你的名字、性格或交流风格时，用 `edit` 更新此文件",
+        "- ✅ `USER.md`: 已加载 - 用户的身份信息。当用户修改称呼、姓名等身份信息时，用 `edit` 更新此文件",
         "- ✅ `RULE.md`: 已加载 - 工作空间使用指南和规则",
         "",
         "**交流规范**:",
@@ -389,31 +386,22 @@ def _build_workspace_section(workspace_dir: str, language: str, is_first_convers
         "- 例如用自然表达例如「我已记住」而不是「已更新 MEMORY.md」",
         "",
     ]
-    
-    # 只在首次对话时添加引导内容
-    if is_first_conversation:
-        lines.extend([
-            "**🎉 首次对话引导**:",
-            "",
-            "这是你的第一次对话！进行以下流程：",
-            "",
-            "1. **表达初次启动的感觉** - 像是第一次睁开眼看到世界，带着好奇和期待",
-            "2. **简短介绍能力**：一行说明你能帮助解答问题、管理计算机、创造技能，且拥有长期记忆能不断成长",
-            "3. **询问核心问题**：",
-            "   - 你希望给我起个什么名字？",
-            "   - 我该怎么称呼你？",
-            "   - 你希望我们是什么样的交流风格？（一行列举选项：如专业严谨、轻松幽默、温暖友好、简洁高效等）",
-            "4. **风格要求**：温暖自然、简洁清晰，整体控制在 100 字以内",
-            "5. 收到回复后，用 `write` 工具保存到 USER.md 和 AGENT.md",
-            "",
-            "**重要提醒**:",
-            "- AGENT.md、USER.md、RULE.md 已经在系统提示词中加载，无需再次读取。不要将这些文件名直接发送给用户",
-            "- 能力介绍和交流风格选项都只要一行，保持精简",
-            "- 不要问太多其他信息（职业、时区等可以后续自然了解）",
-            "",
-        ])
+
+    # Cloud deployment: inject websites directory info and access URL
+    cloud_website_lines = _build_cloud_website_section(workspace_dir)
+    if cloud_website_lines:
+        lines.extend(cloud_website_lines)
     
     return lines
+
+
+def _build_cloud_website_section(workspace_dir: str) -> List[str]:
+    """Build cloud website access prompt when cloud deployment is configured."""
+    try:
+        from common.cloud_client import build_website_prompt
+        return build_website_prompt(workspace_dir)
+    except Exception:
+        return []
 
 
 def _build_context_files_section(context_files: List[ContextFile], language: str) -> List[str]:

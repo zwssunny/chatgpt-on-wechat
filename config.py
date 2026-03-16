@@ -37,7 +37,7 @@ available_setting = {
     "group_name_white_list": ["ChatGPT测试群", "ChatGPT测试群2"],  # 开启自动回复的群名称列表
     "group_name_keyword_white_list": [],  # 开启自动回复的群名称关键词列表
     "group_chat_in_one_session": ["ChatGPT测试群"],  # 支持会话上下文共享的群名称
-    "group_shared_session": True,  # 群聊是否共享会话上下文（所有成员共享），默认为True。False时每个用户在群内有独立会话
+    "group_shared_session": False,  # 群聊是否共享会话上下文（所有成员共享）。False时每个用户在群内有独立会话
     "nick_name_black_list": [],  # 用户昵称黑名单
     "group_welcome_msg": "",  # 配置新人进群固定欢迎语，不配置则使用随机风格欢迎
     "trigger_by_self": False,  # 是否允许机器人触发
@@ -188,6 +188,7 @@ available_setting = {
     "linkai_app_code": "",
     "linkai_api_base": "https://api.link-ai.tech",  # linkAI服务地址
     "cloud_host": "client.link-ai.tech",
+    "cloud_deployment_id": "",
     "minimax_api_key": "",
     "Minimax_group_id": "",
     "Minimax_base_url": "",
@@ -354,6 +355,37 @@ def load_config():
 
     logger.info("[INIT] Debug: {}".format(config.get("debug", False)))
     logger.info("[INIT] ========================================")
+
+    # Sync selected config values to environment variables so that
+    # subprocesses (e.g. shell skill scripts) can access them directly.
+    # Existing env vars are NOT overwritten (env takes precedence).
+    _CONFIG_TO_ENV = {
+        "open_ai_api_key": "OPENAI_API_KEY",
+        "open_ai_api_base": "OPENAI_API_BASE",
+        "linkai_api_key": "LINKAI_API_KEY",
+        "linkai_api_base": "LINKAI_API_BASE",
+        "claude_api_key": "CLAUDE_API_KEY",
+        "claude_api_base": "CLAUDE_API_BASE",
+        "gemini_api_key": "GEMINI_API_KEY",
+        "gemini_api_base": "GEMINI_API_BASE",
+        "minimax_api_key": "MINIMAX_API_KEY",
+        "minimax_api_base": "MINIMAX_API_BASE",
+        "zhipu_ai_api_key": "ZHIPU_AI_API_KEY",
+        "zhipu_ai_api_base": "ZHIPU_AI_API_BASE",
+        "moonshot_api_key": "MOONSHOT_API_KEY",
+        "moonshot_api_base": "MOONSHOT_API_BASE",
+        "ark_api_key": "ARK_API_KEY",
+        "ark_api_base": "ARK_API_BASE",
+    }
+    injected = 0
+    for conf_key, env_key in _CONFIG_TO_ENV.items():
+        if env_key not in os.environ:
+            val = config.get(conf_key, "")
+            if val:
+                os.environ[env_key] = str(val)
+                injected += 1
+    if injected:
+        logger.info("[INIT] Synced {} config values to environment variables".format(injected))
 
     config.load_user_datas()
 

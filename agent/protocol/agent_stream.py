@@ -8,6 +8,7 @@ import time
 from typing import List, Dict, Any, Optional, Callable, Tuple
 
 from agent.protocol.models import LLMRequest, LLMModel
+from agent.protocol.message_utils import sanitize_claude_messages, compress_turn_to_text_only
 from agent.tools.base_tool import BaseTool, ToolResult
 from common.log import logger
 
@@ -189,6 +190,16 @@ class AgentStreamExecutor:
                 }
             ]
         })
+
+        # Trim context ONCE before the agent loop starts, not during tool steps.
+        # This ensures tool_use/tool_result chains created during the current run
+        # are never stripped mid-execution (which would cause LLM loops).
+        self._trim_messages()
+
+        # Validate after trimming: trimming may leave orphaned tool_use at the
+        # boundary (e.g. the last kept turn ends with an assistant tool_use whose
+        # tool_result was in a discarded turn).
+        self._validate_and_fix_messages()
 
         self._emit_event("agent_start")
 
@@ -416,7 +427,10 @@ class AgentStreamExecutor:
                 # Force model to summarize without tool calls
                 logger.info(f"[Agent] Requesting summary from LLM after reaching max steps...")
                 
-                # Add a system message to force summary
+                # Remember position before injecting the prompt so we can remove it later
+                prompt_insert_idx = len(self.messages)
+                
+                # Add a temporary prompt to force summary
                 self.messages.append({
                     "role": "user",
                     "content": [{
@@ -443,6 +457,14 @@ class AgentStreamExecutor:
                         f"我已经执行了{turn}个决策步骤，达到了单次运行的步数上限。"
                         "任务可能还未完全完成，建议你将任务拆分成更小的步骤，或者换一种方式描述需求。"
                     )
+                finally:
+                    # Remove the injected user prompt from history to avoid polluting
+                    # persisted conversation records. The assistant summary (if any)
+                    # was already appended by _call_llm_stream and is kept.
+                    if (prompt_insert_idx < len(self.messages)
+                            and self.messages[prompt_insert_idx].get("role") == "user"):
+                        self.messages.pop(prompt_insert_idx)
+                        logger.debug("[Agent] Removed injected max-steps prompt from message history")
 
         except Exception as e:
             logger.error(f"❌ Agent执行错误: {e}")
@@ -469,11 +491,11 @@ class AgentStreamExecutor:
         Returns:
             (response_text, tool_calls)
         """
-        # Validate and fix message history first
+        # Validate and fix message history (e.g. orphaned tool_result blocks).
+        # Context trimming is done once in run_stream() before the loop starts,
+        # NOT here — trimming mid-execution would strip the current run's
+        # tool_use/tool_result chains and cause LLM loops.
         self._validate_and_fix_messages()
-        
-        # Trim messages if needed (using agent's context management)
-        self._trim_messages()
 
         # Prepare messages
         messages = self._prepare_messages()
@@ -505,6 +527,7 @@ class AgentStreamExecutor:
         # Streaming response
         full_content = ""
         tool_calls_buffer = {}  # {index: {id, name, arguments}}
+        gemini_raw_parts = None  # Preserve Gemini thoughtSignature for round-trip
         stop_reason = None  # Track why the stream stopped
 
         try:
@@ -595,6 +618,10 @@ class AgentStreamExecutor:
                                     tool_calls_buffer[index]["name"] = func["name"]
                                 if "arguments" in func:
                                     tool_calls_buffer[index]["arguments"] += func["arguments"]
+
+                    # Preserve _gemini_raw_parts for Gemini thoughtSignature round-trip
+                    if "_gemini_raw_parts" in delta:
+                        gemini_raw_parts = delta["_gemini_raw_parts"]
 
         except Exception as e:
             error_str = str(e)
@@ -777,6 +804,9 @@ class AgentStreamExecutor:
                     "input": tc.get("arguments", {})
                 })
         
+        if gemini_raw_parts:
+            assistant_msg["_gemini_raw_parts"] = gemini_raw_parts
+
         # Only append if content is not empty
         if assistant_msg["content"]:
             self.messages.append(assistant_msg)
@@ -900,56 +930,8 @@ class AgentStreamExecutor:
             return error_result
 
     def _validate_and_fix_messages(self):
-        """
-        Validate message history and fix broken tool_use/tool_result pairs.
-
-        Historical messages restored from DB are text-only (no tool calls),
-        so this method only needs to handle edge cases in the current session:
-        - Trailing assistant message with tool_use but no following tool_result
-          (e.g. process was interrupted mid-execution)
-        - Orphaned tool_result at the start of messages (e.g. after context
-          trimming removed the preceding assistant tool_use)
-        """
-        if not self.messages:
-            return
-
-        removed = 0
-
-        # Remove trailing incomplete tool_use assistant messages
-        while self.messages:
-            last_msg = self.messages[-1]
-            if last_msg.get("role") == "assistant":
-                content = last_msg.get("content", [])
-                if isinstance(content, list) and any(
-                    isinstance(b, dict) and b.get("type") == "tool_use"
-                    for b in content
-                ):
-                    logger.warning("⚠️ Removing trailing incomplete tool_use assistant message")
-                    self.messages.pop()
-                    removed += 1
-                    continue
-            break
-
-        # Remove leading orphaned tool_result user messages
-        while self.messages:
-            first_msg = self.messages[0]
-            if first_msg.get("role") == "user":
-                content = first_msg.get("content", [])
-                if isinstance(content, list) and any(
-                    isinstance(b, dict) and b.get("type") == "tool_result"
-                    for b in content
-                ) and not any(
-                    isinstance(b, dict) and b.get("type") == "text"
-                    for b in content
-                ):
-                    logger.warning("⚠️ Removing leading orphaned tool_result user message")
-                    self.messages.pop(0)
-                    removed += 1
-                    continue
-            break
-
-        if removed > 0:
-            logger.info(f"🔧 Message validation: removed {removed} broken message(s)")
+        """Delegate to the shared sanitizer (see message_sanitizer.py)."""
+        sanitize_claude_messages(self.messages)
 
     def _identify_complete_turns(self) -> List[Dict]:
         """
@@ -1189,10 +1171,10 @@ class AgentStreamExecutor:
         if not turns:
             return
         
-        # Step 2: 轮次限制 - 超出时裁到 max_turns/2，批量 flush 被裁的轮次
+        # Step 2: 轮次限制 - 超出时移除前一半，保留后一半
         if len(turns) > self.max_context_turns:
-            keep_count = max(1, self.max_context_turns // 2)
-            removed_count = len(turns) - keep_count
+            removed_count = len(turns) // 2
+            keep_count = len(turns) - removed_count
             
             # Flush discarded turns to daily memory
             if self.agent.memory_manager:
@@ -1247,9 +1229,47 @@ class AgentStreamExecutor:
                 logger.info(f"   重建消息列表: {old_count} -> {len(self.messages)} 条消息")
             return
 
-        # Token limit exceeded - keep the latest half of turns (same strategy as turn limit)
-        keep_count = max(1, len(turns) // 2)
-        removed_count = len(turns) - keep_count
+        # Token limit exceeded — tiered strategy based on turn count:
+        #
+        #   Few turns (<5):  Compress ALL turns to text-only (strip tool chains,
+        #                    keep user query + final reply).  Never discard turns
+        #                    — losing even one is too painful when context is thin.
+        #
+        #   Many turns (>=5): Directly discard the first half of turns.
+        #                     With enough turns the oldest ones are less
+        #                     critical, and keeping the recent half intact
+        #                     (with full tool chains) is more useful.
+
+        COMPRESS_THRESHOLD = 5
+
+        if len(turns) < COMPRESS_THRESHOLD:
+            # --- Few turns: compress ALL turns to text-only, never discard ---
+            compressed_turns = []
+            for t in turns:
+                compressed = compress_turn_to_text_only(t)
+                if compressed["messages"]:
+                    compressed_turns.append(compressed)
+
+            new_messages = []
+            for turn in compressed_turns:
+                new_messages.extend(turn["messages"])
+
+            new_tokens = sum(self._estimate_turn_tokens(t) for t in compressed_turns)
+            old_count = len(self.messages)
+            self.messages = new_messages
+
+            logger.info(
+                f"📦 上下文tokens超限(轮次<{COMPRESS_THRESHOLD}): "
+                f"~{current_tokens + system_tokens} > {max_tokens}，"
+                f"压缩全部 {len(turns)} 轮为纯文本 "
+                f"({old_count} -> {len(self.messages)} 条消息，"
+                f"~{current_tokens + system_tokens} -> ~{new_tokens + system_tokens} tokens)"
+            )
+            return
+
+        # --- Many turns (>=5): discard the older half, keep the newer half ---
+        removed_count = len(turns) // 2
+        keep_count = len(turns) - removed_count
         kept_turns = turns[-keep_count:]
         kept_tokens = sum(self._estimate_turn_tokens(t) for t in kept_turns)
 
@@ -1258,7 +1278,6 @@ class AgentStreamExecutor:
             f"裁剪至 {keep_count} 轮（移除 {removed_count} 轮）"
         )
 
-        # Flush discarded turns to daily memory
         if self.agent.memory_manager:
             discarded_messages = []
             for turn in turns[:removed_count]:
@@ -1269,14 +1288,14 @@ class AgentStreamExecutor:
                     messages=discarded_messages, user_id=user_id,
                     reason="trim", max_messages=0
                 )
-        
+
         new_messages = []
         for turn in kept_turns:
             new_messages.extend(turn['messages'])
-        
+
         old_count = len(self.messages)
         self.messages = new_messages
-        
+
         logger.info(
             f"   移除了 {removed_count} 轮对话 "
             f"({old_count} -> {len(self.messages)} 条消息，"

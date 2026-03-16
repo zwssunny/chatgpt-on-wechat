@@ -10,6 +10,7 @@ This includes: OpenAI, LinkAI, Azure OpenAI, and many third-party providers.
 import json
 import openai
 from common.log import logger
+from agent.protocol.message_utils import drop_orphaned_tool_results_openai
 
 
 class OpenAICompatibleBot:
@@ -293,6 +294,9 @@ class OpenAICompatibleBot:
                     if tool_calls:
                         openai_msg["tool_calls"] = tool_calls
 
+                    if msg.get("_gemini_raw_parts"):
+                        openai_msg["_gemini_raw_parts"] = msg["_gemini_raw_parts"]
+
                     openai_messages.append(openai_msg)
                 else:
                     # Other list content, keep as is
@@ -300,5 +304,5 @@ class OpenAICompatibleBot:
             else:
                 # Other formats, keep as is
                 openai_messages.append(msg)
-        
-        return openai_messages
+
+        return drop_orphaned_tool_results_openai(openai_messages)

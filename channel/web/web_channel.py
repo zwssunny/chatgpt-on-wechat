@@ -393,8 +393,8 @@ class ConfigHandler:
         const.KIMI_K2_5, const.KIMI_K2,
         const.DOUBAO_SEED_2_PRO, const.DOUBAO_SEED_2_CODE,
         const.CLAUDE_4_6_SONNET, const.CLAUDE_4_6_OPUS, const.CLAUDE_4_5_SONNET,
-        const.GEMINI_31_PRO_PRE, const.GEMINI_3_FLASH_PRE,
-        const.GPT_5, const.GPT_41, const.GPT_4o,
+        const.GEMINI_31_FLASH_LITE_PRE, const.GEMINI_31_PRO_PRE, const.GEMINI_3_FLASH_PRE,
+        const.GPT_54, const.GPT_5, const.GPT_41, const.GPT_4o,
         const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER,
     ]
 
@@ -406,7 +406,7 @@ class ConfigHandler:
             "api_base_default": None,
             "models": [const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING],
         }),
-        ("glm-4", {
+        ("zhipu", {
             "label": "智谱AI",
             "api_key_field": "zhipu_ai_api_key",
             "api_base_key": "zhipu_ai_api_base",
@@ -446,14 +446,14 @@ class ConfigHandler:
             "api_key_field": "gemini_api_key",
             "api_base_key": "gemini_api_base",
             "api_base_default": "https://generativelanguage.googleapis.com",
-            "models": [const.GEMINI_31_PRO_PRE, const.GEMINI_3_FLASH_PRE],
+            "models": [const.GEMINI_31_FLASH_LITE_PRE, const.GEMINI_31_PRO_PRE, const.GEMINI_3_FLASH_PRE],
         }),
-        ("openAI", {
+        ("chatGPT", {
             "label": "OpenAI",
             "api_key_field": "open_ai_api_key",
             "api_base_key": "open_ai_api_base",
             "api_base_default": "https://api.openai.com/v1",
-            "models": [const.GPT_5, const.GPT_41, const.GPT_4o],
+            "models": [const.GPT_54, const.GPT_5, const.GPT_41, const.GPT_4o],
         }),
         ("deepseek", {
             "label": "DeepSeek",
@@ -472,7 +472,7 @@ class ConfigHandler:
     ])
 
     EDITABLE_KEYS = {
-        "model", "use_linkai",
+        "model", "bot_type", "use_linkai",
         "open_ai_api_base", "claude_api_base", "gemini_api_base",
         "zhipu_ai_api_base", "moonshot_base_url", "ark_base_url",
         "open_ai_api_key", "claude_api_key", "gemini_api_key",
@@ -522,6 +522,7 @@ class ConfigHandler:
                 "use_agent": use_agent,
                 "title": title,
                 "model": local_config.get("model", ""),
+                "bot_type": local_config.get("bot_type", ""),
                 "use_linkai": bool(local_config.get("use_linkai", False)),
                 "channel_type": local_config.get("channel_type", ""),
                 "agent_max_context_tokens": local_config.get("agent_max_context_tokens", 50000),

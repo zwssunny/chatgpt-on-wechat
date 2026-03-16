@@ -77,10 +77,6 @@ class AgentInitializer:
         # Initialize skill manager
         skill_manager = self._initialize_skill_manager(workspace_root, session_id)
         
-        # Check if first conversation
-        from agent.prompt.workspace import is_first_conversation, mark_conversation_started
-        is_first = is_first_conversation(workspace_root)
-        
         # Build system prompt
         prompt_builder = PromptBuilder(workspace_dir=workspace_root, language="zh")
         runtime_info = self._get_runtime_info(workspace_root)
@@ -91,11 +87,7 @@ class AgentInitializer:
             skill_manager=skill_manager,
             memory_manager=memory_manager,
             runtime_info=runtime_info,
-            is_first_conversation=is_first
         )
-        
-        if is_first:
-            mark_conversation_started(workspace_root)
         
         # Get cost control parameters
         from config import conf
@@ -272,12 +264,11 @@ class AgentInitializer:
             from agent.tools import MemorySearchTool, MemoryGetTool
             from config import conf
             
-            # Get OpenAI config
+            # Initialize embedding provider (prefer OpenAI, fallback to LinkAI)
+            embedding_provider = None
+
             openai_api_key = conf().get("open_ai_api_key", "")
             openai_api_base = conf().get("open_ai_api_base", "")
-            
-            # Initialize embedding provider
-            embedding_provider = None
             if openai_api_key and openai_api_key not in ["", "YOUR API KEY", "YOUR_API_KEY"]:
                 try:
                     embedding_provider = create_embedding_provider(
@@ -290,6 +281,22 @@ class AgentInitializer:
                         logger.info("[AgentInitializer] OpenAI embedding initialized")
                 except Exception as e:
                     logger.warning(f"[AgentInitializer] OpenAI embedding failed: {e}")
+
+            if embedding_provider is None:
+                linkai_api_key = conf().get("linkai_api_key", "") or os.environ.get("LINKAI_API_KEY", "")
+                linkai_api_base = conf().get("linkai_api_base", "https://api.link-ai.tech")
+                if linkai_api_key and linkai_api_key not in ["", "YOUR API KEY", "YOUR_API_KEY"]:
+                    try:
+                        embedding_provider = create_embedding_provider(
+                            provider="linkai",
+                            model="text-embedding-3-small",
+                            api_key=linkai_api_key,
+                            api_base=f"{linkai_api_base}/v1"
+                        )
+                        if session_id is None:
+                            logger.info("[AgentInitializer] LinkAI embedding initialized (fallback)")
+                    except Exception as e:
+                        logger.warning(f"[AgentInitializer] LinkAI embedding failed: {e}")
             
             # Create memory manager
             memory_config = MemoryConfig(workspace_root=workspace_root)
@@ -359,7 +366,7 @@ class AgentInitializer:
 
                 if tool:
                     # Apply workspace config to file operation tools
-                    if tool_name in ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls']:
+                    if tool_name in ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'web_fetch']:
                         tool.config = file_config
                         tool.cwd = file_config.get("cwd", getattr(tool, 'cwd', None))
                         if 'memory_manager' in file_config:

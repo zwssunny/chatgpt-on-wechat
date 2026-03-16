@@ -2,7 +2,6 @@
 
 import time
 import json
-from pydantic.types import T
 import requests
 
 from models.bot import Bot
@@ -13,6 +12,7 @@ from bridge.reply import Reply, ReplyType
 from common.log import logger
 from config import conf, load_config
 from common import const
+from agent.protocol.message_utils import drop_orphaned_tool_results_openai
 
 
 # MiniMax对话模型API
@@ -213,7 +213,7 @@ class MinimaxBot(Bot):
 
             # Prepare API parameters
             model = kwargs.pop("model", None) or self.args["model"]
-            max_tokens = kwargs.pop("max_tokens", 4096)
+            max_tokens = kwargs.pop("max_tokens", 100000)
             temperature = kwargs.pop("temperature", self.args["temperature"])
 
             # Build request body
@@ -356,7 +356,7 @@ class MinimaxBot(Bot):
 
                 converted.append(openai_msg)
 
-        return converted
+        return drop_orphaned_tool_results_openai(converted)
 
     def _convert_tools_to_openai_format(self, tools):
         """

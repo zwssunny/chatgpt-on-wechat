@@ -210,14 +210,23 @@ After initialization, customize the SKILL.md and add resources as needed. If you
 
 When editing the (newly-generated or existing) skill, remember that the skill is being created for another instance of the agent to use. Include information that would be beneficial and non-obvious to the agent. Consider what procedural knowledge, domain-specific details, or reusable assets would help another agent instance execute these tasks more effectively.
 
-#### Learn Proven Design Patterns
+#### Design Patterns
 
-Consult these helpful guides based on your skill's needs:
+**Workflow patterns** — For complex tasks, break operations into sequential steps or conditional branches:
 
-- **Multi-step processes**: See references/workflows.md for sequential workflows and conditional logic
-- **Specific output formats or quality standards**: See references/output-patterns.md for template and example patterns
+```markdown
+# Sequential: list numbered steps with scripts
+1. Analyze the form (run analyze_form.py)
+2. Create field mapping (edit fields.json)
+3. Fill the form (run fill_form.py)
 
-These files contain established best practices for effective skill design.
+# Conditional: guide through decision points
+1. Determine the modification type:
+   **Creating new content?** → Follow "Creation workflow"
+   **Editing existing content?** → Follow "Editing workflow"
+```
+
+**Output patterns** — When consistent output format matters, provide a template or input/output examples in SKILL.md so the agent can follow the desired style.
 
 #### Start with Reusable Skill Contents
 
@@ -261,14 +270,16 @@ Write the YAML frontmatter with `name`, `description`, and optional `metadata`:
   - Example description for a `docx` skill: "Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. Use when the agent needs to work with professional documents (.docx files) for: (1) Creating new documents, (2) Modifying or editing content, (3) Working with tracked changes, (4) Adding comments, or any other document tasks"
 - `metadata`: (Optional) Specify requirements and configuration
   - `requires.bins`: Required binaries (e.g., `["curl", "jq"]`)
-  - `requires.env`: Required environment variables (e.g., `["OPENAI_API_KEY"]`)
-  - `primaryEnv`: Primary environment variable name (for API keys)
+  - `requires.env`: Required environment variables — all must be set (e.g., `["MYAPI_KEY"]`)
+  - `requires.anyEnv`: Alternative environment variables — at least one must be set (e.g., `["OPENAI_API_KEY", "LINKAI_API_KEY"]`)
+  - `requires.anyBins`: Alternative binaries — at least one must be present
   - `always`: Set to `true` to always load regardless of requirements
   - `emoji`: Skill icon (optional)
+  - Do NOT set `category` — it defaults to `skill` and is managed by the system
 
 **API Key Requirements**:
 
-If your skill needs an API key, declare it in metadata:
+If your skill needs a single API key, declare it in `requires.env`:
 
 ```yaml
 ---
@@ -278,7 +289,19 @@ metadata:
   requires:
     bins: ["curl"]
     env: ["MYAPI_KEY"]
-  primaryEnv: "MYAPI_KEY"
+---
+```
+
+If your skill supports multiple API key providers (e.g., OpenAI or LinkAI), use `requires.anyEnv`:
+
+```yaml
+---
+name: my-vision
+description: Analyze images using Vision API
+metadata:
+  requires:
+    bins: ["curl"]
+    anyEnv: ["OPENAI_API_KEY", "LINKAI_API_KEY"]
 ---
 ```
 
