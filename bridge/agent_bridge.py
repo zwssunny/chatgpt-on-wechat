@@ -106,7 +106,7 @@ class AgentLLMModel(LLMModel):
             return configured_bot_type
        
         if not model_name or not isinstance(model_name, str):
-            return const.CHATGPT
+            return const.OPENAI
         if model_name in self._MODEL_BOT_TYPE_MAP:
             return self._MODEL_BOT_TYPE_MAP[model_name]
         if model_name.lower().startswith("minimax") or model_name in ["abab6.5-chat"]:
@@ -116,11 +116,11 @@ class AgentLLMModel(LLMModel):
         if model_name in [const.MOONSHOT, "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"]:
             return const.MOONSHOT
         if model_name in [const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER]:
-            return const.CHATGPT
+            return const.OPENAI
         for prefix, btype in self._MODEL_PREFIX_MAP:
             if model_name.startswith(prefix):
                 return btype
-        return const.CHATGPT
+        return const.OPENAI
 
     @property
     def bot(self):
@@ -152,12 +152,20 @@ class AgentLLMModel(LLMModel):
                 # Only pass max_tokens if it's explicitly set
                 if request.max_tokens is not None:
                     kwargs['max_tokens'] = request.max_tokens
-                
+
                 # Extract system prompt if present
                 system_prompt = getattr(request, 'system', None)
                 if system_prompt:
                     kwargs['system'] = system_prompt
-                
+
+                # Pass context metadata to bot
+                channel_type = getattr(self, 'channel_type', None)
+                if channel_type:
+                    kwargs['channel_type'] = channel_type
+                session_id = getattr(self, 'session_id', None)
+                if session_id:
+                    kwargs['session_id'] = session_id
+
                 response = self.bot.call_with_tools(**kwargs)
                 return self._format_response(response)
             else:
@@ -195,10 +203,13 @@ class AgentLLMModel(LLMModel):
                 if system_prompt:
                     kwargs['system'] = system_prompt
 
-                # Pass channel_type for linkai tracking
+                # Pass context metadata to bot
                 channel_type = getattr(self, 'channel_type', None)
                 if channel_type:
                     kwargs['channel_type'] = channel_type
+                session_id = getattr(self, 'session_id', None)
+                if session_id:
+                    kwargs['session_id'] = session_id
 
                 stream = self.bot.call_with_tools(**kwargs)
                 
@@ -278,12 +289,13 @@ class AgentBridge:
             tools=tools,
             max_steps=kwargs.get("max_steps", 15),
             output_mode=kwargs.get("output_mode", "logger"),
-            workspace_dir=kwargs.get("workspace_dir"),  # Pass workspace for skills loading
-            enable_skills=kwargs.get("enable_skills", True),  # Enable skills by default
-            memory_manager=kwargs.get("memory_manager"),  # Pass memory manager
+            workspace_dir=kwargs.get("workspace_dir"),
+            skill_manager=kwargs.get("skill_manager"),
+            enable_skills=kwargs.get("enable_skills", True),
+            memory_manager=kwargs.get("memory_manager"),
             max_context_tokens=kwargs.get("max_context_tokens"),
             context_reserve_tokens=kwargs.get("context_reserve_tokens"),
-            runtime_info=kwargs.get("runtime_info")  # Pass runtime_info for dynamic time updates
+            runtime_info=kwargs.get("runtime_info"),
         )
 
         # Log skill loading details
@@ -374,9 +386,10 @@ class AgentBridge:
                                 logger.warning(f"[AgentBridge] Failed to attach context to scheduler: {e}")
                             break
             
-            # Pass channel_type to model so linkai requests carry it
+            # Pass context metadata to model for downstream API requests
             if context and hasattr(agent, 'model'):
                 agent.model.channel_type = context.get("channel_type", "")
+                agent.model.session_id = session_id or ""
 
             # Store session_id on agent so executor can clear DB on fatal errors
             agent._current_session_id = session_id

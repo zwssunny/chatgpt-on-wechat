@@ -4,15 +4,16 @@
   <a href="https://github.com/zhayujie/chatgpt-on-wechat/releases/latest"><img src="https://img.shields.io/github/v/release/zhayujie/chatgpt-on-wechat" alt="Latest release"></a>
   <a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/LICENSE"><img src="https://img.shields.io/github/license/zhayujie/chatgpt-on-wechat" alt="License: MIT"></a>
   <a href="https://github.com/zhayujie/chatgpt-on-wechat"><img src="https://img.shields.io/github/stars/zhayujie/chatgpt-on-wechat?style=flat-square" alt="Stars"></a> <br/>
-  [<a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/README.md">中文</a>] | [English]
+  [<a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/README.md">中文</a>] | [English] | [<a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/docs/ja/README.md">日本語</a>]
 </p>
 
-**CowAgent** is an AI super assistant powered by LLMs, capable of autonomous task planning, operating computers and external resources, creating and executing Skills, and continuously growing with long-term memory. It supports flexible model switching, handles text, voice, images, and files, and can be integrated into Web, Feishu, DingTalk, WeCom, and WeChat Official Account — running 7×24 hours on your personal computer or server.
+**CowAgent** is an AI super assistant powered by LLMs, capable of autonomous task planning, operating computers and external resources, creating and executing Skills, and continuously growing with long-term memory. It supports flexible model switching, handles text, voice, images, and files, and can be integrated into Web, Feishu, DingTalk, WeCom Bot, WeCom App, and WeChat Official Account — running 7×24 hours on your personal computer or server.
 
 <p align="center">
   <a href="https://cowagent.ai/">🌐 Website</a> &nbsp;·&nbsp;
   <a href="https://docs.cowagent.ai/en/intro/index">📖 Docs</a> &nbsp;·&nbsp;
-  <a href="https://docs.cowagent.ai/en/guide/quick-start">🚀 Quick Start</a>
+  <a href="https://docs.cowagent.ai/en/guide/quick-start">🚀 Quick Start</a> &nbsp;·&nbsp;
+  <a href="https://link-ai.tech/cowagent/create">☁️ Try Online</a>
 </p>
 
 ## Introduction
@@ -32,6 +33,10 @@
 1. This project follows the [MIT License](/LICENSE) and is intended for technical research and learning. Users must comply with local laws, regulations, policies, and corporate bylaws. Any illegal or rights-infringing use is prohibited.
 2. Agent mode consumes more tokens than normal chat mode. Choose models based on effectiveness and cost. Agent has access to the host OS — please deploy in trusted environments.
 3. CowAgent focuses on open-source development and does not participate in, authorize, or issue any cryptocurrency.
+
+## Demo
+
+Try online (no deployment needed): [CowAgent](https://link-ai.tech/cowagent/create)
 
 ## Changelog
 
@@ -56,7 +61,7 @@ Full changelog: [Release Notes](https://docs.cowagent.ai/en/releases/overview)
 The project provides a one-click script for installation, configuration, startup, and management:
 
 ```bash
-bash <(curl -sS https://cdn.link-ai.tech/code/cow/run.sh)
+bash <(curl -fsSL https://cdn.link-ai.tech/code/cow/run.sh)
 ```
 
 After running, the Web service starts by default. Access `http://localhost:9899/chat` to chat.
@@ -102,7 +107,7 @@ nohup python3 app.py & tail -f nohup.out
 ### Docker Deployment
 
 ```bash
-wget https://cdn.link-ai.tech/code/cow/docker-compose.yml
+curl -O https://cdn.link-ai.tech/code/cow/docker-compose.yml
 # Edit docker-compose.yml with your config
 sudo docker compose up -d
 sudo docker logs -f chatgpt-on-wechat
@@ -116,8 +121,8 @@ Supports mainstream model providers. Recommended models for Agent mode:
 
 | Provider | Recommended Model |
 | --- | --- |
-| MiniMax | `MiniMax-M2.5` |
-| GLM | `glm-5` |
+| MiniMax | `MiniMax-M2.7` |
+| GLM | `glm-5-turbo` |
 | Kimi | `kimi-k2.5` |
 | Doubao | `doubao-seed-2-0-code-preview-260215` |
 | Qwen | `qwen3.5-plus` |
@@ -127,6 +132,28 @@ Supports mainstream model providers. Recommended models for Agent mode:
 | DeepSeek | `deepseek-chat` |
 
 For detailed configuration of each model, see the [Models documentation](https://docs.cowagent.ai/en/models/index).
+
+### Coding Plan
+
+Coding Plan is a monthly subscription package offered by various providers, ideal for high-frequency Agent usage. All providers can be accessed via OpenAI-compatible mode:
+
+```json
+{
+  "bot_type": "openai",
+  "model": "MODEL_NAME",
+  "open_ai_api_base": "PROVIDER_CODING_PLAN_API_BASE",
+  "open_ai_api_key": "YOUR_API_KEY"
+}
+```
+
+- `bot_type`: Must be `openai`
+- `model`: Model name supported by the provider
+- `open_ai_api_base`: Provider's Coding Plan API Base (different from standard pay-as-you-go)
+- `open_ai_api_key`: Provider's Coding Plan API Key
+
+> Note: Coding Plan API Base and API Key are usually separate from standard pay-as-you-go ones. Please obtain them from each provider's platform.
+
+Supported providers include Alibaba Cloud, MiniMax, Zhipu GLM, Kimi, Volcengine, and more. For detailed configuration of each provider, see the [Coding Plan documentation](https://docs.cowagent.ai/en/models/coding-plan).
 
 <br/>
 
@@ -139,6 +166,7 @@ Supports multiple platforms. Set `channel_type` in `config.json` to switch:
 | Web (default) | `web` | [Web Channel](https://docs.cowagent.ai/en/channels/web) |
 | Feishu | `feishu` | [Feishu Setup](https://docs.cowagent.ai/en/channels/feishu) |
 | DingTalk | `dingtalk` | [DingTalk Setup](https://docs.cowagent.ai/en/channels/dingtalk) |
+| WeCom Bot | `wecom_bot` | [WeCom Bot Setup](https://docs.cowagent.ai/en/channels/wecom-bot) |
 | WeCom App | `wechatcom_app` | [WeCom Setup](https://docs.cowagent.ai/en/channels/wecom) |
 | WeChat MP | `wechatmp` / `wechatmp_service` | [WeChat MP Setup](https://docs.cowagent.ai/en/channels/wechatmp) |
 | Terminal | `terminal` | — |

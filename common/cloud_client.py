@@ -26,6 +26,8 @@ CHANNEL_ACTIONS = {"channel_create", "channel_update", "channel_delete"}
 CREDENTIAL_MAP = {
     "feishu":            ("feishu_app_id",          "feishu_app_secret"),
     "dingtalk":          ("dingtalk_client_id",      "dingtalk_client_secret"),
+    "wecom_bot":         ("wecom_bot_id",            "wecom_bot_secret"),
+    "qq":                ("qq_app_id",               "qq_app_secret"),
     "wechatmp":          ("wechatmp_app_id",         "wechatmp_app_secret"),
     "wechatmp_service":  ("wechatmp_app_id",         "wechatmp_app_secret"),
     "wechatcom_app":     ("wechatcomapp_agent_id",   "wechatcomapp_secret"),
@@ -199,27 +201,36 @@ class CloudClient(LinkAIClient):
 
     def _handle_channel_create(self, channel_type: str, data: dict):
         local_config = conf()
-        self._set_channel_credentials(local_config, channel_type,
-                                      data.get("appId"), data.get("appSecret"))
+        cred_changed = self._set_channel_credentials(
+            local_config, channel_type, data.get("appId"), data.get("appSecret"))
         self._add_channel_type(local_config, channel_type)
         self._save_config_to_file(local_config)
 
-        if self.channel_mgr:
+        if not self.channel_mgr:
+            return
+
+        existing_ch = self.channel_mgr.get_channel(channel_type)
+        if existing_ch and not cred_changed:
+            logger.info(f"[CloudClient] Channel '{channel_type}' already running with same config, "
+                        "skip restart, reporting status only")
             threading.Thread(
-                target=self._do_add_channel, args=(channel_type,), daemon=True
+                target=self._report_channel_startup, args=(channel_type,), daemon=True
             ).start()
+            return
+
+        threading.Thread(
+            target=self._do_add_channel, args=(channel_type,), daemon=True
+        ).start()
 
     def _handle_channel_update(self, channel_type: str, data: dict):
         local_config = conf()
         enabled = data.get("enabled", "Y")
 
-        self._set_channel_credentials(local_config, channel_type,
-                                      data.get("appId"), data.get("appSecret"))
+        cred_changed = self._set_channel_credentials(
+            local_config, channel_type, data.get("appId"), data.get("appSecret"))
         if enabled == "N":
             self._remove_channel_type(local_config, channel_type)
         else:
-            # Ensure channel_type is persisted even if this channel was not
-            # previously listed (e.g. update used as implicit create).
             self._add_channel_type(local_config, channel_type)
         self._save_config_to_file(local_config)
 
@@ -231,9 +242,17 @@ class CloudClient(LinkAIClient):
                 target=self._do_remove_channel, args=(channel_type,), daemon=True
             ).start()
         else:
-            threading.Thread(
-                target=self._do_restart_channel, args=(self.channel_mgr, channel_type), daemon=True
-            ).start()
+            existing_ch = self.channel_mgr.get_channel(channel_type)
+            if existing_ch and not cred_changed:
+                logger.info(f"[CloudClient] Channel '{channel_type}' already running with same config, "
+                            "skip restart, reporting status only")
+                threading.Thread(
+                    target=self._report_channel_startup, args=(channel_type,), daemon=True
+                ).start()
+            else:
+                threading.Thread(
+                    target=self._do_restart_channel, args=(self.channel_mgr, channel_type), daemon=True
+                ).start()
 
     def _handle_channel_delete(self, channel_type: str, data: dict):
         local_config = conf()
@@ -254,6 +273,8 @@ class CloudClient(LinkAIClient):
                                  app_id, app_secret) -> bool:
         """
         Write app_id / app_secret into the correct config keys for *channel_type*.
+        Also syncs the values to environment variables (upper-cased key) so that
+        skills that rely on env-based checks (e.g. has_env_var) work immediately.
         Returns True if any value actually changed.
         """
         cred = CREDENTIAL_MAP.get(channel_type)
@@ -263,10 +284,14 @@ class CloudClient(LinkAIClient):
         changed = False
         if app_id is not None and local_config.get(id_key) != app_id:
             local_config[id_key] = app_id
+            os.environ[id_key.upper()] = str(app_id)
             changed = True
         if app_secret is not None and local_config.get(secret_key) != app_secret:
             local_config[secret_key] = app_secret
+            os.environ[secret_key.upper()] = str(app_secret)
             changed = True
+        if changed:
+            logger.info(f"[CloudClient] Synced {channel_type} credentials to conf and env")
         return changed
 
     @staticmethod
@@ -277,6 +302,8 @@ class CloudClient(LinkAIClient):
         id_key, secret_key = cred
         local_config.pop(id_key, None)
         local_config.pop(secret_key, None)
+        os.environ.pop(id_key.upper(), None)
+        os.environ.pop(secret_key.upper(), None)
 
     # ------------------------------------------------------------------
     # channel_type list helpers
@@ -312,7 +339,7 @@ class CloudClient(LinkAIClient):
             self.channel_mgr.add_channel(channel_type)
             logger.info(f"[CloudClient] Channel '{channel_type}' added successfully")
         except Exception as e:
-            logger.error(f"[CloudClient] Failed to add channel '{channel_type}': {e}")
+            logger.error(f"[CloudClient] Failed to add channel '{channel_type}': {e}", exc_info=True)
             self.send_channel_status(channel_type, "error", str(e))
             return
         self._report_channel_startup(channel_type)
@@ -592,6 +619,9 @@ def build_website_prompt(workspace_dir: str) -> list:
     ]
 
 def start(channel, channel_mgr=None):
+    if not get_deployment_id():
+        return
+
     global chat_client
     chat_client = CloudClient(api_key=conf().get("linkai_api_key"), host=conf().get("cloud_host", ""), channel=channel)
     chat_client.channel_mgr = channel_mgr
@@ -661,6 +691,12 @@ def _build_config():
     elif current_channel_type in ("wechatmp", "wechatmp_service"):
         config["app_id"] = local_conf.get("wechatmp_app_id")
         config["app_secret"] = local_conf.get("wechatmp_app_secret")
+    elif current_channel_type == "wecom_bot":
+        config["app_id"] = local_conf.get("wecom_bot_id")
+        config["app_secret"] = local_conf.get("wecom_bot_secret")
+    elif current_channel_type == "qq":
+        config["app_id"] = local_conf.get("qq_app_id")
+        config["app_secret"] = local_conf.get("qq_app_secret")
     elif current_channel_type == "wechatcom_app":
         config["app_id"] = local_conf.get("wechatcomapp_agent_id")
         config["app_secret"] = local_conf.get("wechatcomapp_secret")

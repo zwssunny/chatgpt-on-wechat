@@ -1,6 +1,6 @@
 {
   "channel_type": "web",
-  "model": "MiniMax-M2.5",
+  "model": "MiniMax-M2.7",
   "minimax_api_key": "",
   "zhipu_ai_api_key": "",
   "ark_api_key": "",
@@ -24,6 +24,8 @@
   "feishu_app_secret": "",
   "dingtalk_client_id": "",
   "dingtalk_client_secret":"",
+  "wecom_bot_id": "",
+  "wecom_bot_secret": "",
   "agent": true,
   "agent_max_context_tokens": 40000,
   "agent_max_context_turns": 20,

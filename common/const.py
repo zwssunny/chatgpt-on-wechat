@@ -1,6 +1,7 @@
 # 厂商类型
 OPEN_AI = "openAI"
-CHATGPT = "chatGPT"
+OPENAI = "openai"
+CHATGPT = "chatGPT"  # legacy alias for OPENAI, kept for backward compatibility
 BAIDU = "baidu"
 XUNFEI = "xunfei"
 CHATGPTONAZURE = "chatGPTOnAzure"
@@ -68,6 +69,8 @@ GPT_5 = "gpt-5"
 GPT_5_MINI = "gpt-5-mini"
 GPT_5_NANO = "gpt-5-nano"
 GPT_54 = "gpt-5.4"  # GPT-5.4 - Agent recommended model
+GPT_54_MINI = "gpt-5.4-mini"
+GPT_54_NANO = "gpt-5.4-nano"
 O1 = "o1-preview"
 O1_MINI = "o1-mini"
 WHISPER_1 = "whisper-1"
@@ -89,14 +92,16 @@ QWEN35_PLUS = "qwen3.5-plus"  # Qwen3.5 Plus - Omni model (MultiModalConversatio
 QWQ_PLUS = "qwq-plus"
 
 # MiniMax
-MINIMAX_M2_5 = "MiniMax-M2.5"  # MiniMax M2.5 - Latest
-MINIMAX_M2_1 = "MiniMax-M2.1"  # MiniMax M2.1 - Agent推荐模型
+MINIMAX_M2_7 = "MiniMax-M2.7"  # MiniMax M2.7 - Latest
+MINIMAX_M2_5 = "MiniMax-M2.5"  # MiniMax M2.5
+MINIMAX_M2_1 = "MiniMax-M2.1"  # MiniMax M2.1
 MINIMAX_M2_1_LIGHTNING = "MiniMax-M2.1-lightning"  # MiniMax M2.1 极速版
 MINIMAX_M2 = "MiniMax-M2"  # MiniMax M2
 MINIMAX_ABAB6_5 = "abab6.5-chat"  # MiniMax abab6.5
 
 # GLM (智谱AI)
-GLM_5 = "glm-5"  # 智谱 GLM-5 - Latest
+GLM_5_TURBO = "glm-5-turbo"  # 智谱 GLM-5-Turbo - Latest
+GLM_5 = "glm-5"  # 智谱 GLM-5
 GLM_4 = "glm-4"
 GLM_4_PLUS = "glm-4-plus"
 GLM_4_flash = "glm-4-flash"
@@ -153,7 +158,7 @@ MODEL_LIST = [
               GPT_4o, GPT_4O_0806, GPT_4o_MINI,
               GPT_41, GPT_41_MINI, GPT_41_NANO,
               GPT_5, GPT_5_MINI, GPT_5_NANO,
-              GPT_54,
+              GPT_54, GPT_54_MINI, GPT_54_NANO,
               O1, O1_MINI,
               
               # DeepSeek
@@ -163,10 +168,10 @@ MODEL_LIST = [
               QWEN, QWEN_TURBO, QWEN_PLUS, QWEN_MAX, QWEN_LONG, QWEN3_MAX, QWEN35_PLUS,
               
               # MiniMax
-              MiniMax, MINIMAX_M2_5, MINIMAX_M2_1, MINIMAX_M2_1_LIGHTNING, MINIMAX_M2, MINIMAX_ABAB6_5,
+              MiniMax, MINIMAX_M2_7, MINIMAX_M2_5, MINIMAX_M2_1, MINIMAX_M2_1_LIGHTNING, MINIMAX_M2, MINIMAX_ABAB6_5,
 
               # GLM
-              ZHIPU_AI, GLM_5, GLM_4, GLM_4_PLUS, GLM_4_flash, GLM_4_LONG, GLM_4_ALLTOOLS,
+              ZHIPU_AI, GLM_5_TURBO, GLM_5, GLM_4, GLM_4_PLUS, GLM_4_flash, GLM_4_LONG, GLM_4_ALLTOOLS,
               GLM_4_0520, GLM_4_AIR, GLM_4_AIRX, GLM_4_7,
 
               # Kimi
@@ -186,3 +191,5 @@ MODEL_LIST = MODEL_LIST + GITEE_AI_MODEL_LIST + MODELSCOPE_MODEL_LIST
 # channel
 FEISHU = "feishu"
 DINGTALK = "dingtalk"
+WECOM_BOT = "wecom_bot"
+QQ = "qq"
