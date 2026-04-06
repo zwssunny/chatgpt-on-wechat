@@ -7,8 +7,8 @@ XUNFEI = "xunfei"
 CHATGPTONAZURE = "chatGPTOnAzure"
 LINKAI = "linkai"
 CLAUDEAPI= "claudeAPI"
-QWEN = "qwen"  # 旧版千问接入
-QWEN_DASHSCOPE = "dashscope"  # 新版千问接入(百炼)
+QWEN = "qwen"  # 千问 (兼容旧配置，实际走 DashscopeBot)
+QWEN_DASHSCOPE = "dashscope"  # 千问 DashScope 接入
 GEMINI = "gemini" 
 ZHIPU_AI = "zhipu"  
 MOONSHOT = "moonshot"
@@ -81,14 +81,14 @@ TTS_1_HD = "tts-1-hd"
 DEEPSEEK_CHAT = "deepseek-chat"  # DeepSeek-V3对话模型
 DEEPSEEK_REASONER = "deepseek-reasoner"  # DeepSeek-R1模型
 
-# Qwen (通义千问 - 阿里云)
-QWEN = "qwen"
+# Qwen (通义千问 - 阿里云 DashScope)
 QWEN_TURBO = "qwen-turbo"
 QWEN_PLUS = "qwen-plus"
 QWEN_MAX = "qwen-max"
 QWEN_LONG = "qwen-long"
 QWEN3_MAX = "qwen3-max"  # Qwen3 Max - Agent推荐模型
 QWEN35_PLUS = "qwen3.5-plus"  # Qwen3.5 Plus - Omni model (MultiModalConversation)
+QWEN36_PLUS = "qwen3.6-plus"  # Qwen3.6 Plus - Omni model (MultiModalConversation)
 QWQ_PLUS = "qwq-plus"
 
 # MiniMax
@@ -124,6 +124,10 @@ DOUBAO_SEED_2_PRO = "doubao-seed-2-0-pro-260215"
 DOUBAO_SEED_2_LITE = "doubao-seed-2-0-lite-260215"
 DOUBAO_SEED_2_MINI = "doubao-seed-2-0-mini-260215"
 
+# ModelScope(魔搭社区)
+QWEN3_235B_A22B_INSTRUCT_2507 = "Qwen/Qwen3-235B-A22B-Instruct-2507"
+QWEN3_5_27B = "Qwen/Qwen3.5-27B"
+
 # 其他模型
 WEN_XIN = "wenxin"
 WEN_XIN_4 = "wenxin-4"
@@ -135,11 +139,14 @@ MODELSCOPE = "modelscope"
 
 GITEE_AI_MODEL_LIST = ["Yi-34B-Chat", "InternVL2-8B", "deepseek-coder-33B-instruct", "InternVL2.5-26B", "Qwen2-VL-72B", "Qwen2.5-32B-Instruct", "glm-4-9b-chat", "codegeex4-all-9b", "Qwen2.5-Coder-32B-Instruct", "Qwen2.5-72B-Instruct", "Qwen2.5-7B-Instruct", "Qwen2-72B-Instruct", "Qwen2-7B-Instruct", "code-raccoon-v1", "Qwen2.5-14B-Instruct"]
 
-MODELSCOPE_MODEL_LIST = ["LLM-Research/c4ai-command-r-plus-08-2024","mistralai/Mistral-Small-Instruct-2409","mistralai/Ministral-8B-Instruct-2410","mistralai/Mistral-Large-Instruct-2407",
-                          "Qwen/Qwen2.5-Coder-32B-Instruct","Qwen/Qwen2.5-Coder-14B-Instruct","Qwen/Qwen2.5-Coder-7B-Instruct","Qwen/Qwen2.5-72B-Instruct","Qwen/Qwen2.5-32B-Instruct","Qwen/Qwen2.5-14B-Instruct","Qwen/Qwen2.5-7B-Instruct","Qwen/QwQ-32B-Preview",
-                          "LLM-Research/Llama-3.3-70B-Instruct","opencompass/CompassJudger-1-32B-Instruct","Qwen/QVQ-72B-Preview","LLM-Research/Meta-Llama-3.1-405B-Instruct","LLM-Research/Meta-Llama-3.1-8B-Instruct","Qwen/Qwen2-VL-7B-Instruct","LLM-Research/Meta-Llama-3.1-70B-Instruct",
-                          "Qwen/Qwen2.5-14B-Instruct-1M","Qwen/Qwen2.5-7B-Instruct-1M","Qwen/Qwen2.5-VL-3B-Instruct","Qwen/Qwen2.5-VL-7B-Instruct","Qwen/Qwen2.5-VL-72B-Instruct","deepseek-ai/DeepSeek-R1-Distill-Llama-70B","deepseek-ai/DeepSeek-R1-Distill-Llama-8B","deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
-                          "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B","deepseek-ai/DeepSeek-R1-Distill-Qwen-7B","deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B","deepseek-ai/DeepSeek-R1","deepseek-ai/DeepSeek-V3","Qwen/QwQ-32B"]
+MODELSCOPE_MODEL_LIST = ["deepseek-ai/DeepSeek-R1-0528", "deepseek-ai/DeepSeek-R1-Distill-Llama-70B", "deepseek-ai/DeepSeek-R1-Distill-Llama-8B", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B", "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
+                         "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", "deepseek-ai/DeepSeek-V3.2", "LLM-Research/c4ai-command-r-plus-08-2024", "LLM-Research/Llama-4-Maverick-17B-128E-Instruct", "meituan-longcat/LongCat-Flash-Lite", "MiniMax/MiniMax-M1-80k", "MiniMax/MiniMax-M2.5", "mistralai/Ministral-8B-Instruct-2410",
+                         "mistralai/Mistral-Large-Instruct-2407", "mistralai/Mistral-Small-Instruct-2409", "moonshotai/Kimi-K2.5", "MusePublic/Qwen-Image-Edit", "opencompass/CompassJudger-1-32B-Instruct", "OpenGVLab/InternVL3_5-241B-A28B",
+                         "Qwen/QVQ-72B-Preview", "Qwen/Qwen-Image-Edit", "Qwen/Qwen3-0.6B", "Qwen/Qwen3-1.7B", "Qwen/Qwen3-14B", "Qwen/Qwen3-235B-A22B", "Qwen/Qwen3-235B-A22B-Instruct-2507", "Qwen/Qwen3-235B-A22B-Thinking-2507", "Qwen/Qwen3-30B-A3B", "Qwen/Qwen3-30B-A3B-Thinking-2507",
+                         "Qwen/Qwen3-32B", "Qwen/Qwen3-4B", "Qwen/Qwen3-8B", "Qwen/Qwen3-Coder-30B-A3B-Instruct", "Qwen/Qwen3-Coder-480B-A35B-Instruct", "Qwen/Qwen3-Next-80B-A3B-Instruct", "Qwen/Qwen3-Next-80B-A3B-Thinking", "Qwen/Qwen3-VL-235B-A22B-Instruct", "Qwen/Qwen3-VL-8B-Instruct",
+                         "Qwen/Qwen3-VL-8B-Thinking", "Qwen/Qwen3.5-122B-A10B", "Qwen/Qwen3.5-27B", "Qwen/Qwen3.5-35B-A3B", "Qwen/Qwen3.5-397B-A17B", "Qwen/QwQ-32B", "Qwen/QwQ-32B-Preview", "Shanghai_AI_Laboratory/Intern-S1", "Shanghai_AI_Laboratory/Intern-S1-mini",
+                         "stepfun-ai/Step-3.5-Flash", "XiaomiMiMo/MiMo-V2-Flash", "ZhipuAI/GLM-4.7-Flash", "ZhipuAI/GLM-5"]
+
 
 MODEL_LIST = [
               # Claude
@@ -165,7 +172,7 @@ MODEL_LIST = [
               DEEPSEEK_CHAT, DEEPSEEK_REASONER,
               
               # Qwen
-              QWEN, QWEN_TURBO, QWEN_PLUS, QWEN_MAX, QWEN_LONG, QWEN3_MAX, QWEN35_PLUS,
+              QWEN36_PLUS, QWEN35_PLUS, QWEN3_MAX, QWEN_MAX, QWEN_PLUS, QWEN_TURBO, QWEN_LONG,
               
               # MiniMax
               MiniMax, MINIMAX_M2_7, MINIMAX_M2_5, MINIMAX_M2_1, MINIMAX_M2_1_LIGHTNING, MINIMAX_M2, MINIMAX_ABAB6_5,
@@ -193,3 +200,4 @@ FEISHU = "feishu"
 DINGTALK = "dingtalk"
 WECOM_BOT = "wecom_bot"
 QQ = "qq"
+WEIXIN = "weixin"

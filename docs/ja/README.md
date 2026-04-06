@@ -7,12 +7,13 @@
   [<a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/README.md">中文</a>] | [<a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/docs/en/README.md">English</a>] | [日本語]
 </p>
 
-**CowAgent** はLLMを搭載したAIスーパーアシスタントです。自律的なタスク計画、コンピュータや外部リソースの操作、Skillの作成・実行、長期記憶による継続的な成長が可能です。柔軟なモデル切り替えに対応し、テキスト・音声・画像・ファイルを処理でき、Web、Feishu（飛書）、DingTalk（釘釘）、WeCom Bot（企業微信ボット）、WeComアプリ、WeChat公式アカウントに統合可能で、個人のPCやサーバー上で24時間365日稼働できます。
+**CowAgent** はLLMを搭載したAIスーパーアシスタントです。自律的なタスク計画、コンピュータや外部リソースの操作、Skillの作成・実行、長期記憶による継続的な成長が可能です。柔軟なモデル切り替えに対応し、テキスト・音声・画像・ファイルを処理でき、WeChat、Web、Feishu（飛書）、DingTalk（釘釘）、WeCom Bot（企業微信ボット）、WeComアプリ、WeChat公式アカウントに統合可能で、個人のPCやサーバー上で24時間365日稼働できます。
 
 <p align="center">
   <a href="https://cowagent.ai/">🌐 ウェブサイト</a> &nbsp;·&nbsp;
   <a href="https://docs.cowagent.ai/en/intro/index">📖 ドキュメント</a> &nbsp;·&nbsp;
   <a href="https://docs.cowagent.ai/en/guide/quick-start">🚀 クイックスタート</a> &nbsp;·&nbsp;
+  <a href="https://skills.cowagent.ai/">🧩 Skill Hub</a> &nbsp;·&nbsp;
   <a href="https://link-ai.tech/cowagent/create">☁️ オンラインで試す</a>
 </p>
 
@@ -20,13 +21,14 @@
 
 > CowAgentは、すぐに使えるAIスーパーアシスタントであると同時に、高い拡張性を持つAgentフレームワークでもあります。新しいモデルインターフェース、チャネル、組み込みツール、Skillシステムを拡張することで、さまざまなカスタマイズニーズに柔軟に対応できます。
 
-- ✅ **自律的タスク計画**: 複雑なタスクを理解し、自律的に実行計画を立て、目標達成までツールを呼び出しながら継続的に思考します。ツールを通じてファイル、ターミナル、ブラウザ、スケジューラなどのシステムリソースにアクセスできます。
+- ✅ **自律的タスク計画**: 複雑なタスクを理解し、自律的に実行計画を立て、目標達成までツールを呼び出しながら継続的に思考します。
 - ✅ **長期記憶**: 会話の記憶をローカルファイルやデータベースに自動的に永続化します。コアメモリとデイリーメモリを含み、キーワード検索やベクトル検索に対応しています。
-- ✅ **Skillシステム**: Skillの作成・実行エンジンを実装しており、複数の組み込みSkillを備え、自然言語での会話を通じたカスタムSkillの開発もサポートしています。
+- ✅ **Skillシステム**: Skillの作成・実行エンジンを実装。[Skill Hub](https://skills.cowagent.ai)、GitHubなどからSkillをインストールでき、会話を通じたカスタムSkill作成もサポートしています。
+- ✅ **ツールシステム**: ファイル読み書き、ターミナル実行、ブラウザ操作、スケジュールタスク、メッセージ送信などの組み込みツールを提供。Agentが自律的に呼び出して複雑なタスクを完了します。
+- ✅ **CLIシステム**: ターミナルコマンドとチャットコマンドを提供し、プロセス管理、Skillインストール、設定変更などの操作をサポートします。
 - ✅ **マルチモーダルメッセージ**: テキスト、画像、音声、ファイルなど、さまざまなメッセージタイプの解析・処理・生成・送信に対応しています。
 - ✅ **複数モデル対応**: OpenAI、Claude、Gemini、DeepSeek、MiniMax、GLM、Qwen、Kimi、Doubaoなど、主要なモデルプロバイダーに対応しています。
-- ✅ **マルチプラットフォームデプロイ**: ローカルPCやサーバー上で実行でき、Web、Feishu、DingTalk、WeChat公式アカウント、WeComアプリケーションに統合可能です。
-- ✅ **ナレッジベース**: [LinkAI](https://link-ai.tech) プラットフォームを通じて、企業向けナレッジベース機能を統合できます。
+- ✅ **マルチプラットフォームデプロイ**: ローカルPCやサーバー上で実行でき、WeChat、Web、Feishu、DingTalk、WeChat公式アカウント、WeComアプリケーションに統合可能です。
 
 ## 免責事項
 
@@ -39,6 +41,8 @@
 オンラインで試す（デプロイ不要）: [CowAgent](https://link-ai.tech/cowagent/create)
 
 ## 更新履歴
+
+> **2026.04.01:** [v2.0.5](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/2.0.5) — Cow CLI、Skill Hubオープンソース化、ブラウザツール、WeCom Botスキャン作成など。
 
 > **2026.02.27:** [v2.0.2](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/2.0.2) — Webコンソールの全面刷新（ストリーミングチャット、モデル/Skill/メモリ/チャネル/スケジューラ/ログ管理）、マルチチャネル同時実行、セッション永続化、Gemini 3.1 Pro / Claude 4.6 Sonnet / Qwen3.5 Plusなど新モデル追加。
 
@@ -60,13 +64,19 @@
 
 本プロジェクトは、インストール・設定・起動・管理をワンクリックで行えるスクリプトを提供しています：
 
+**Linux / macOS:**
 ```bash
 bash <(curl -fsSL https://cdn.link-ai.tech/code/cow/run.sh)
 ```
 
+**Windows (PowerShell):**
+```powershell
+irm https://cdn.link-ai.tech/code/cow/run.ps1 | iex
+```
+
 実行後、デフォルトでWebサービスが起動します。`http://localhost:9899/chat` にアクセスしてチャットを開始できます。
 
-スクリプトの使い方: [ワンクリックインストール](https://docs.cowagent.ai/en/guide/quick-start)
+スクリプトの使い方: [ワンクリックインストール](https://docs.cowagent.ai/ja/guide/quick-start)。インストール後は `cow start`、`cow stop` などの [CLI コマンド](https://docs.cowagent.ai/ja/cli/index)でサービスを管理できます。
 
 ### 手動インストール
 
@@ -84,7 +94,25 @@ pip3 install -r requirements.txt
 pip3 install -r requirements-optional.txt   # 任意ですが推奨
 ```
 
-**3. 設定**
+**3. Cow CLI のインストール（推奨）**
+
+```bash
+pip3 install -e .
+```
+
+インストール後、`cow` コマンドでサービス管理（起動、停止、更新など）やSkill管理ができます。[コマンドドキュメント](https://docs.cowagent.ai/ja/cli/index)を参照してください。
+
+**4. ブラウザのインストール（任意）**
+
+Agentにブラウザ操作（Webページへのアクセス、フォーム入力など）が必要な場合：
+
+```bash
+cow install-browser
+```
+
+`playwright` と Chromium を自動インストールします。[ブラウザツールドキュメント](https://docs.cowagent.ai/ja/tools/browser)を参照してください。
+
+**5. 設定**
 
 ```bash
 cp config-template.json config.json
@@ -92,13 +120,25 @@ cp config-template.json config.json
 
 `config.json` にモデルのAPIキーとチャネルタイプを記入してください。詳細は[設定ドキュメント](https://docs.cowagent.ai/en/guide/manual-install)を参照してください。
 
-**4. 実行**
+**6. 実行**
 
 ```bash
-python3 app.py
+cow start              # 推奨、Cow CLI が必要
+python3 app.py         # または直接実行
 ```
 
-サーバーでバックグラウンド実行する場合：
+サーバーデプロイでは、`cow` コマンドでサービスを管理できます：
+
+```bash
+cow start              # バックグラウンドで起動
+cow stop               # サービス停止
+cow restart            # サービス再起動
+cow status             # 実行状態を確認
+cow logs               # ログを表示
+cow update             # 最新コードを取得して再起動
+```
+
+または従来の方法で実行：
 
 ```bash
 nohup python3 app.py & tail -f nohup.out
@@ -125,7 +165,7 @@ sudo docker logs -f chatgpt-on-wechat
 | GLM | `glm-5-turbo` |
 | Kimi | `kimi-k2.5` |
 | Doubao | `doubao-seed-2-0-code-preview-260215` |
-| Qwen | `qwen3.5-plus` |
+| Qwen | `qwen3.6-plus` |
 | Claude | `claude-sonnet-4-6` |
 | Gemini | `gemini-3.1-pro-preview` |
 | OpenAI | `gpt-5.4` |
@@ -163,6 +203,7 @@ Coding Planは各プロバイダーが提供する月額サブスクリプショ
 
 | チャネル | `channel_type` | ドキュメント |
 | --- | --- | --- |
+| WeChat | `weixin` | [WeChat設定](https://docs.cowagent.ai/ja/channels/weixin) |
 | Web（デフォルト） | `web` | [Webチャネル](https://docs.cowagent.ai/en/channels/web) |
 | Feishu（飛書） | `feishu` | [Feishu設定](https://docs.cowagent.ai/en/channels/feishu) |
 | DingTalk（釘釘） | `dingtalk` | [DingTalk設定](https://docs.cowagent.ai/en/channels/dingtalk) |
@@ -185,6 +226,7 @@ Coding Planは各プロバイダーが提供する月額サブスクリプショ
 
 ## 🔗 関連プロジェクト
 
+- [Cow Skill Hub](https://github.com/zhayujie/cow-skill-hub): AIエージェント向けのオープンSkillマーケットプレイス。CowAgent、OpenClaw、Claude Codeなどで利用可能なSkillの閲覧・検索・インストール・公開が可能。
 - [bot-on-anything](https://github.com/zhayujie/bot-on-anything): 軽量で高い拡張性を持つLLMアプリケーションフレームワーク。Slack、Telegram、Discord、Gmailなどに対応。
 - [AgentMesh](https://github.com/MinimalFuture/AgentMesh): エージェントチームの協調による複雑な問題解決のためのオープンソースのマルチエージェントフレームワーク。
 
@@ -194,7 +236,7 @@ FAQ: <https://github.com/zhayujie/chatgpt-on-wechat/wiki/FAQs>
 
 ## 🛠️ コントリビューション
 
-新しいチャネルの追加を歓迎します。[Feishuチャネル](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/channel/feishu/feishu_channel.py)を参考にしてください。また、新しいSkillのコントリビューションも歓迎します。[Skill Creatorドキュメント](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/skills/skill-creator/SKILL.md)を参照してください。
+新しいチャネルの追加を歓迎します。[Feishuチャネル](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/channel/feishu/feishu_channel.py)を参考にしてください。また、新しいSkillのコントリビューションも歓迎します。[Skill作成ドキュメント](https://docs.cowagent.ai/ja/skills/create)を参照するか、[Skill Hub](https://skills.cowagent.ai/submit)に提出してください。
 
 ## ✉ お問い合わせ
 

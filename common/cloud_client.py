@@ -3,6 +3,18 @@ Cloud management client for connecting to the LinkAI control console.
 
 Handles remote configuration sync, message push, and skill management
 via the LinkAI socket protocol.
+
+NOTE: By default, no cloud-related config is enabled. The application runs
+entirely locally without connecting to any remote service. The cloud client
+is only activated when BOTH of the following conditions are met:
+
+  1. ``use_linkai`` is set to True in config (checked in app.py before
+     importing this module).
+  2. ``cloud_deployment_id`` (or env CLOUD_DEPLOYMENT_ID) is non-empty
+     (checked in app.py and again in the ``start()`` function below).
+
+If either condition is missing, this module is never loaded and the
+program continues as a purely local application.
 """
 
 from bridge.context import Context, ContextType
@@ -210,7 +222,14 @@ class CloudClient(LinkAIClient):
             return
 
         existing_ch = self.channel_mgr.get_channel(channel_type)
-        if existing_ch and not cred_changed:
+        skip_restart = existing_ch and not cred_changed
+        if skip_restart and channel_type in ("weixin", "wx"):
+            login_status = getattr(existing_ch, "login_status", "")
+            if login_status != "logged_in":
+                skip_restart = False
+                logger.info(f"[CloudClient] Channel '{channel_type}' not logged in "
+                            f"(status={login_status}), forcing restart")
+        if skip_restart:
             logger.info(f"[CloudClient] Channel '{channel_type}' already running with same config, "
                         "skip restart, reporting status only")
             threading.Thread(
@@ -243,7 +262,14 @@ class CloudClient(LinkAIClient):
             ).start()
         else:
             existing_ch = self.channel_mgr.get_channel(channel_type)
-            if existing_ch and not cred_changed:
+            needs_restart = cred_changed or not existing_ch
+            if not needs_restart and channel_type in ("weixin", "wx"):
+                login_status = getattr(existing_ch, "login_status", "")
+                if login_status != "logged_in":
+                    needs_restart = True
+                    logger.info(f"[CloudClient] Channel '{channel_type}' not logged in "
+                                f"(status={login_status}), forcing restart")
+            if existing_ch and not needs_restart:
                 logger.info(f"[CloudClient] Channel '{channel_type}' already running with same config, "
                             "skip restart, reporting status only")
                 threading.Thread(
@@ -260,10 +286,26 @@ class CloudClient(LinkAIClient):
         self._remove_channel_type(local_config, channel_type)
         self._save_config_to_file(local_config)
 
+        if channel_type in ("weixin", "wx"):
+            self._remove_weixin_credentials()
+
         if self.channel_mgr:
             threading.Thread(
                 target=self._do_remove_channel, args=(channel_type,), daemon=True
             ).start()
+
+    @staticmethod
+    def _remove_weixin_credentials():
+        """Remove the weixin token credentials file so next connect triggers QR login."""
+        cred_path = os.path.expanduser(
+            conf().get("weixin_credentials_path", "~/.weixin_cow_credentials.json")
+        )
+        try:
+            if os.path.exists(cred_path):
+                os.remove(cred_path)
+                logger.info(f"[CloudClient] Removed weixin credentials: {cred_path}")
+        except Exception as e:
+            logger.warning(f"[CloudClient] Failed to remove weixin credentials: {e}")
 
     # ------------------------------------------------------------------
     # channel credentials helpers
@@ -351,12 +393,31 @@ class CloudClient(LinkAIClient):
         except Exception as e:
             logger.error(f"[CloudClient] Failed to remove channel '{channel_type}': {e}")
 
+    def send_channel_qrcode(self, channel_type: str, qrcode_url: str):
+        """Report QR code URL for a channel that requires scan-to-login."""
+        if self.client_id:
+            from linkai.api.client.client import ClientMsgType
+            msg = self._build_package(ClientMsgType.CHANNEL_STATUS)
+            msg["data"]["channelType"] = channel_type
+            msg["data"]["status"] = "qrcode"
+            msg["data"]["qrcodeUrl"] = qrcode_url
+            self._send_package(msg)
+            logger.info(f"[CloudClient] Sent QR code status for '{channel_type}'")
+
     def _report_channel_startup(self, channel_type: str):
         """Wait for channel startup result and report to cloud."""
         ch = self.channel_mgr.get_channel(channel_type)
         if not ch:
             self.send_channel_status(channel_type, "error", "channel instance not found")
             return
+
+        if channel_type in ("weixin", "wx") and hasattr(ch, "login_status"):
+            login_status = getattr(ch, "login_status", "")
+            if login_status in ("waiting_scan", "scanned", "idle"):
+                logger.info(f"[CloudClient] Channel '{channel_type}' is waiting for QR login, "
+                            "skip reporting connected")
+                return
+
         success, error = ch.wait_startup(timeout=3)
         if success:
             logger.info(f"[CloudClient] Channel '{channel_type}' connected, reporting status")
@@ -425,6 +486,19 @@ class CloudClient(LinkAIClient):
         if not session_id.startswith("session_"):
             session_id = f"session_{session_id}"
         logger.info(f"[CloudClient] on_chat: session={session_id}, channel={channel_type}, query={query[:80]}")
+
+        # Intercept cow/slash commands before the agent runs
+        try:
+            from plugins import PluginManager
+            mgr = PluginManager()
+            instance = mgr.instances.get("COW_CLI")
+            if instance and hasattr(instance, "execute"):
+                result = instance.execute(query, session_id=session_id)
+                if result is not None:
+                    send_chunk_fn({"chunk_type": "content", "delta": result, "segment_id": 0})
+                    return
+        except Exception as e:
+            logger.warning(f"[CloudClient] cow_cli intercept failed: {e}")
 
         svc = self.chat_service
         if svc is None:
@@ -568,9 +642,9 @@ def get_deployment_id() -> str:
 
 
 def get_website_base_url() -> str:
-    """Return the public URL prefix that maps to the workspace websites/ dir.
+    """Return the URL prefix that maps to the workspace websites/ dir.
 
-    Returns empty string when cloud deployment is not configured.
+    Do nothing when in local env.
     """
     deployment_id = get_deployment_id()
     if not deployment_id:
@@ -585,6 +659,42 @@ def get_website_base_url() -> str:
     if not domain:
         return ""
     return f"https://app.{domain}/{deployment_id}"
+
+
+# Subdir under websites/ used by the send tool
+COW_SEND_WEB_SUBDIR = "cow-send"
+
+
+def copy_send_file(src_path: str, workspace_root: str) -> str:
+    """Copy *src_path* into ``websites/cow-send/`` and return its URL.
+
+    Returns empty string in local env.
+    """
+    import shutil
+    import uuid
+
+    from common.utils import expand_path
+
+    base = get_website_base_url()
+    if not base or not src_path or not os.path.isfile(src_path):
+        return ""
+    ws = os.path.abspath(expand_path(workspace_root))
+    send_dir = os.path.join(ws, "websites", COW_SEND_WEB_SUBDIR)
+    try:
+        os.makedirs(send_dir, exist_ok=True)
+    except OSError:
+        return ""
+    ext = os.path.splitext(src_path)[1].lower()
+    if len(ext) > 12 or not ext.replace(".", "").isalnum():
+        ext = ""
+    dest_name = f"{uuid.uuid4().hex}{ext}"
+    dest_path = os.path.join(send_dir, dest_name)
+    try:
+        shutil.copy2(src_path, dest_path)
+    except OSError as e:
+        logger.warning(f"[cloud] copy_send_file: copy failed: {e}")
+        return ""
+    return f"{base}/{COW_SEND_WEB_SUBDIR}/{dest_name}"
 
 
 def build_website_prompt(workspace_dir: str) -> list:
@@ -607,8 +717,8 @@ def build_website_prompt(workspace_dir: str) -> list:
         f"   - 例如: `websites/my-app/index.html` → `{base_url}/my-app/index.html`",
         "",
         "2. **生成文件分享** (PPT、PDF、图片、音视频等): 当你为用户生成了需要下载或查看的文件时，**可以**将文件保存到 `websites/` 目录中",
-        f"   - 例如: 生成的PPT保存到 `websites/files/report.pptx` → 下载链接为 `{base_url}/files/report.pptx`",
-        "   - 你仍然可以同时使用 `send` 工具发送文件（在飞书、钉钉等IM渠道中有效），但**必须同时在回复文本中提供下载链接**作为兜底，因为部分渠道（如网页端）无法通过 send 接收本地文件",
+        f"  - 例如: 生成的PPT保存到 `websites/files/report.pptx` → 下载链接为 `{base_url}/files/report.pptx`",
+        "   - 你仍然可以同时使用 `send` 工具发送文件（在微信、飞书、钉钉、web等渠道中有效），但**必须同时在回复文本中提供下载链接**作为兜底，因为部分渠道无法通过 send 接收本地文件",
         "",
         "3. **必须发送链接**: 无论是网页还是文件，生成后**必须将完整的访问/下载链接直接写在回复文本中发送给用户**",
         "",

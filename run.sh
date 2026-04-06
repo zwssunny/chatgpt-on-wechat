@@ -171,8 +171,11 @@ clone_project() {
         mv chatgpt-on-wechat-master chatgpt-on-wechat
         rm chatgpt-on-wechat.zip
     else
-        git clone https://github.com/zhayujie/chatgpt-on-wechat.git || \
-        git clone https://gitee.com/zhayujie/chatgpt-on-wechat.git
+        GIT_HTTP_CONNECT_TIMEOUT=10 GIT_HTTP_LOW_SPEED_LIMIT=1024 GIT_HTTP_LOW_SPEED_TIME=15 \
+        git clone --depth 10 --progress https://github.com/zhayujie/chatgpt-on-wechat.git || {
+            echo -e "${YELLOW}⚠️  GitHub is slow, switching to Gitee mirror...${NC}"
+            git clone --depth 10 --progress https://gitee.com/zhayujie/chatgpt-on-wechat.git
+        }
         if [[ $? -ne 0 ]]; then
             echo -e "${RED}❌ Project clone failed. Please check network connection.${NC}"
             exit 1
@@ -195,7 +198,10 @@ clone_project() {
 # Install dependencies
 install_dependencies() {
     echo -e "${GREEN}📦 Installing dependencies...${NC}"
-    local PIP_MIRROR="-i https://pypi.tuna.tsinghua.edu.cn/simple"
+    local PIP_MIRROR=""
+    if curl -s --connect-timeout 5 https://pypi.tuna.tsinghua.edu.cn/simple/ > /dev/null 2>&1; then
+        PIP_MIRROR="-i https://pypi.tuna.tsinghua.edu.cn/simple"
+    fi
 
     PIP_EXTRA_ARGS=""
     if $PYTHON_CMD -c "import sys; exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
@@ -242,6 +248,17 @@ install_dependencies() {
     fi
 
     rm -f /tmp/pip_install.log
+
+    # Register `cow` CLI command via editable install
+    echo -e "${YELLOW}Registering cow CLI...${NC}"
+    set +e
+    $PYTHON_CMD -m pip install -e . $PIP_EXTRA_ARGS $PIP_MIRROR > /dev/null 2>&1
+    if command -v cow &> /dev/null; then
+        echo -e "${GREEN}✅ cow CLI registered.${NC}"
+    else
+        echo -e "${YELLOW}⚠️  cow CLI not in PATH, you can still use: $PYTHON_CMD -m cli.cli${NC}"
+    fi
+    set -e
 }
 
 # Select model
@@ -254,7 +271,7 @@ select_model() {
     echo -e "${YELLOW}2) Zhipu AI (glm-5-turbo, glm-5, etc.)${NC}"
     echo -e "${YELLOW}3) Kimi (kimi-k2.5, kimi-k2, etc.)${NC}"
     echo -e "${YELLOW}4) Doubao (doubao-seed-2-0-code-preview-260215, etc.)${NC}"
-    echo -e "${YELLOW}5) Qwen (qwen3.5-plus, qwen3-max, qwq-plus, etc.)${NC}"
+    echo -e "${YELLOW}5) Qwen (qwen3.6-plus, qwen3.5-plus, qwen3-max, qwq-plus, etc.)${NC}"
     echo -e "${YELLOW}6) Claude (claude-sonnet-4-6, claude-opus-4-6, etc.)${NC}"
     echo -e "${YELLOW}7) Gemini (gemini-3.1-flash-lite-preview, gemini-3.1-pro-preview, etc.)${NC}"
     echo -e "${YELLOW}8) OpenAI GPT (gpt-5.4, gpt-5.2, gpt-4.1, etc.)${NC}"
@@ -301,7 +318,7 @@ configure_model() {
         2) read_model_config "Zhipu AI" "glm-5-turbo" "ZHIPU_KEY" ;;
         3) read_model_config "Kimi (Moonshot)" "kimi-k2.5" "MOONSHOT_KEY" ;;
         4) read_model_config "Doubao (Volcengine Ark)" "doubao-seed-2-0-code-preview-260215" "ARK_KEY" ;;
-        5) read_model_config "Qwen (DashScope)" "qwen3.5-plus" "DASHSCOPE_KEY" ;;
+        5) read_model_config "Qwen (DashScope)" "qwen3.6-plus" "DASHSCOPE_KEY" ;;
         6)
             read_model_config "Claude" "claude-sonnet-4-6" "CLAUDE_KEY"
             read_api_base "CLAUDE_BASE" "https://api.anthropic.com/v1"
@@ -327,23 +344,24 @@ select_channel() {
     echo -e "${CYAN}${BOLD}=========================================${NC}"
     echo -e "${CYAN}${BOLD}   Select Communication Channel${NC}"
     echo -e "${CYAN}${BOLD}=========================================${NC}"
-    echo -e "${YELLOW}1) Feishu (飞书)${NC}"
-    echo -e "${YELLOW}2) DingTalk (钉钉)${NC}"
-    echo -e "${YELLOW}3) WeCom Bot (企微智能机器人)${NC}"
-    echo -e "${YELLOW}4) QQ (QQ 机器人)${NC}"
-    echo -e "${YELLOW}5) WeCom App (企微自建应用)${NC}"
-    echo -e "${YELLOW}6) Web (网页)${NC}"
+    echo -e "${YELLOW}1) Weixin (微信)${NC}"
+    echo -e "${YELLOW}2) Feishu (飞书)${NC}"
+    echo -e "${YELLOW}3) DingTalk (钉钉)${NC}"
+    echo -e "${YELLOW}4) WeCom Bot (企微智能机器人)${NC}"
+    echo -e "${YELLOW}5) QQ (QQ 机器人)${NC}"
+    echo -e "${YELLOW}6) WeCom App (企微自建应用)${NC}"
+    echo -e "${YELLOW}7) Web (网页)${NC}"
     echo ""
     
     while true; do
-        read -p "Enter your choice [press Enter for default: 1 - Feishu]: " channel_choice
+        read -p "Enter your choice [press Enter for default: 1 - Weixin]: " channel_choice
         channel_choice=${channel_choice:-1}
         case "$channel_choice" in
-            1|2|3|4|5|6)
+            1|2|3|4|5|6|7)
                 break
                 ;;
             *)
-                echo -e "${RED}Invalid choice. Please enter 1-6.${NC}"
+                echo -e "${RED}Invalid choice. Please enter 1-7.${NC}"
                 ;;
         esac
     done
@@ -353,6 +371,11 @@ select_channel() {
 configure_channel() {
     case "$channel_choice" in
         1)
+            # Weixin
+            CHANNEL_TYPE="weixin"
+            ACCESS_INFO="Weixin channel configured. Scan QR code in terminal or web console to login."
+            ;;
+        2)
             # Feishu (WebSocket mode)
             CHANNEL_TYPE="feishu"
             echo -e "${GREEN}Configure Feishu (WebSocket mode)...${NC}"
@@ -364,7 +387,7 @@ configure_channel() {
             FEISHU_EVENT_MODE="websocket"
             ACCESS_INFO="Feishu channel configured (WebSocket mode)"
             ;;
-        2)
+        3)
             # DingTalk
             CHANNEL_TYPE="dingtalk"
             echo -e "${GREEN}Configure DingTalk...${NC}"
@@ -375,7 +398,7 @@ configure_channel() {
             DT_CLIENT_SECRET="$dt_client_secret"
             ACCESS_INFO="DingTalk channel configured"
             ;;
-        3)
+        4)
             # WeCom Bot
             CHANNEL_TYPE="wecom_bot"
             echo -e "${GREEN}Configure WeCom Bot...${NC}"
@@ -386,7 +409,7 @@ configure_channel() {
             WECOM_BOT_SECRET="$wecom_bot_secret"
             ACCESS_INFO="WeCom Bot channel configured"
             ;;
-        4)
+        5)
             # QQ
             CHANNEL_TYPE="qq"
             echo -e "${GREEN}Configure QQ Bot...${NC}"
@@ -397,7 +420,7 @@ configure_channel() {
             QQ_APP_SECRET="$qq_app_secret"
             ACCESS_INFO="QQ Bot channel configured"
             ;;
-        5)
+        6)
             # WeCom App
             CHANNEL_TYPE="wechatcom_app"
             echo -e "${GREEN}Configure WeCom App...${NC}"
@@ -417,7 +440,7 @@ configure_channel() {
             WECHATCOM_PORT="$com_port"
             ACCESS_INFO="WeCom App channel configured on port ${com_port}"
             ;;
-        6)
+        7)
             # Web
             CHANNEL_TYPE="web"
             read -p "Enter web port [press Enter for default: 9899]: " web_port
@@ -521,23 +544,31 @@ start_project() {
     echo -e "${GREEN}${EMOJI_ROCKET} Starting CowAgent...${NC}"
     sleep 1
 
-    if [ ! -f "${BASE_DIR}/nohup.out" ]; then
-        touch "${BASE_DIR}/nohup.out"
+    local USE_COW=false
+    if command -v cow &> /dev/null; then
+        USE_COW=true
     fi
 
-    OS_TYPE=$(uname)
-
-    if [[ "$OS_TYPE" == "Linux" ]]; then
-        # Linux: use setsid to detach from terminal
-        nohup setsid $PYTHON_CMD "${BASE_DIR}/app.py" > "${BASE_DIR}/nohup.out" 2>&1 &
-        echo -e "${GREEN}${EMOJI_COW} CowAgent started on Linux (using $PYTHON_CMD)${NC}"
-    elif [[ "$OS_TYPE" == "Darwin" ]]; then
-        # macOS: use nohup to prevent SIGHUP
-        nohup $PYTHON_CMD "${BASE_DIR}/app.py" > "${BASE_DIR}/nohup.out" 2>&1 &
-        echo -e "${GREEN}${EMOJI_COW} CowAgent started on macOS (using $PYTHON_CMD)${NC}"
+    if $USE_COW; then
+        cd "${BASE_DIR}"
+        cow start --no-logs
     else
-        echo -e "${RED}❌ Unsupported OS: ${OS_TYPE}${NC}"
-        exit 1
+        if [ ! -f "${BASE_DIR}/nohup.out" ]; then
+            touch "${BASE_DIR}/nohup.out"
+        fi
+
+        OS_TYPE=$(uname)
+
+        if [[ "$OS_TYPE" == "Linux" ]]; then
+            nohup setsid $PYTHON_CMD "${BASE_DIR}/app.py" > "${BASE_DIR}/nohup.out" 2>&1 &
+            echo -e "${GREEN}${EMOJI_COW} CowAgent started on Linux (using $PYTHON_CMD)${NC}"
+        elif [[ "$OS_TYPE" == "Darwin" ]]; then
+            nohup $PYTHON_CMD "${BASE_DIR}/app.py" > "${BASE_DIR}/nohup.out" 2>&1 &
+            echo -e "${GREEN}${EMOJI_COW} CowAgent started on macOS (using $PYTHON_CMD)${NC}"
+        else
+            echo -e "${RED}❌ Unsupported OS: ${OS_TYPE}${NC}"
+            exit 1
+        fi
     fi
 
     sleep 2
@@ -548,14 +579,23 @@ start_project() {
     echo -e "${CYAN}$ACCESS_INFO${NC}"
     echo ""
     echo -e "${CYAN}${BOLD}Management Commands:${NC}"
-    echo -e "  ${GREEN}./run.sh stop${NC}       Stop the service"
-    echo -e "  ${GREEN}./run.sh restart${NC}    Restart the service"
-    echo -e "  ${GREEN}./run.sh status${NC}     Check status"
-    echo -e "  ${GREEN}./run.sh logs${NC}       View logs"
-    echo -e "  ${GREEN}./run.sh update${NC}     Update and restart"
+    if $USE_COW; then
+        echo -e "  ${GREEN}cow stop${NC}       Stop the service"
+        echo -e "  ${GREEN}cow restart${NC}    Restart the service"
+        echo -e "  ${GREEN}cow status${NC}     Check status"
+        echo -e "  ${GREEN}cow logs${NC}       View logs"
+        echo -e "  ${GREEN}cow update${NC}     Update and restart"
+        echo -e "  ${GREEN}cow install-browser${NC}  Install browser tool"
+    else
+        echo -e "  ${GREEN}./run.sh stop${NC}       Stop the service"
+        echo -e "  ${GREEN}./run.sh restart${NC}    Restart the service"
+        echo -e "  ${GREEN}./run.sh status${NC}     Check status"
+        echo -e "  ${GREEN}./run.sh logs${NC}       View logs"
+        echo -e "  ${GREEN}./run.sh update${NC}     Update and restart"
+    fi
     echo -e "${CYAN}${BOLD}=========================================${NC}"
     echo ""
-    
+
     echo -e "${YELLOW}Showing recent logs (Ctrl+C to exit, agent keeps running):${NC}"
     sleep 2
     tail -n 30 -f "${BASE_DIR}/nohup.out"
@@ -597,7 +637,7 @@ ensure_python_cmd() {
 # Get service PID (empty string if not running)
 get_pid() {
     ensure_python_cmd > /dev/null 2>&1
-    ps ax | grep -i app.py | grep "${BASE_DIR}" | grep "$PYTHON_CMD" | grep -v grep | awk '{print $1}' | grep -E '^[0-9]+$'
+    ps ax | grep -i app.py | grep "${BASE_DIR}" | grep "$PYTHON_CMD" | grep -v grep | awk '{print $1}' | grep -E '^[0-9]+$' | head -1
 }
 
 # Check if service is running
@@ -605,94 +645,122 @@ is_running() {
     [ -n "$(get_pid)" ]
 }
 
+# Check if cow CLI is available
+has_cow() {
+    command -v cow &> /dev/null
+}
+
 # Start service
 cmd_start() {
-    # Check if config.json exists
     if [ ! -f "${BASE_DIR}/config.json" ]; then
         echo -e "${RED}${EMOJI_CROSS} config.json not found${NC}"
         echo -e "${YELLOW}Please run './run.sh' to configure first${NC}"
         exit 1
     fi
-    
-    if is_running; then
-        echo -e "${YELLOW}${EMOJI_WARN} CowAgent is already running (PID: $(get_pid))${NC}"
-        echo -e "${YELLOW}Use './run.sh restart' to restart${NC}"
-        return
+
+    if has_cow; then
+        cd "${BASE_DIR}"
+        cow start
+    else
+        if is_running; then
+            echo -e "${YELLOW}${EMOJI_WARN} CowAgent is already running (PID: $(get_pid))${NC}"
+            echo -e "${YELLOW}Use './run.sh restart' to restart${NC}"
+            return
+        fi
+        check_python_version
+        start_project
     fi
-    
-    check_python_version
-    start_project
 }
 
 # Stop service
 cmd_stop() {
-    echo -e "${GREEN}${EMOJI_STOP} Stopping CowAgent...${NC}"
+    if has_cow; then
+        cd "${BASE_DIR}"
+        cow stop
+    else
+        echo -e "${GREEN}${EMOJI_STOP} Stopping CowAgent...${NC}"
 
-    if ! is_running; then
-        echo -e "${YELLOW}${EMOJI_WARN} CowAgent is not running${NC}"
-        return
+        if ! is_running; then
+            echo -e "${YELLOW}${EMOJI_WARN} CowAgent is not running${NC}"
+            return
+        fi
+
+        pid=$(get_pid)
+        if [ -z "$pid" ] || ! echo "$pid" | grep -qE '^[0-9]+$'; then
+            echo -e "${RED}❌ Failed to get valid PID (got: ${pid})${NC}"
+            return 1
+        fi
+
+        echo -e "${GREEN}Found running process (PID: ${pid})${NC}"
+
+        kill ${pid}
+        sleep 3
+
+        if ps -p ${pid} > /dev/null 2>&1; then
+            echo -e "${YELLOW}⚠️  Process not stopped, forcing termination...${NC}"
+            kill -9 ${pid}
+        fi
+
+        echo -e "${GREEN}${EMOJI_CHECK} CowAgent stopped${NC}"
     fi
-
-    pid=$(get_pid)
-    if [ -z "$pid" ] || ! echo "$pid" | grep -qE '^[0-9]+$'; then
-        echo -e "${RED}❌ Failed to get valid PID (got: ${pid})${NC}"
-        return 1
-    fi
-
-    echo -e "${GREEN}Found running process (PID: ${pid})${NC}"
-
-    kill ${pid}
-    sleep 3
-
-    if ps -p ${pid} > /dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Process not stopped, forcing termination...${NC}"
-        kill -9 ${pid}
-    fi
-
-    echo -e "${GREEN}${EMOJI_CHECK} CowAgent stopped${NC}"
 }
 
 # Restart service
 cmd_restart() {
-    cmd_stop
-    sleep 1
-    cmd_start
+    if has_cow; then
+        cd "${BASE_DIR}"
+        cow restart
+    else
+        cmd_stop
+        sleep 1
+        cmd_start
+    fi
 }
 
 # Check status
 cmd_status() {
-    echo -e "${CYAN}${BOLD}=========================================${NC}"
-    echo -e "${CYAN}${BOLD}   ${EMOJI_COW} CowAgent Status${NC}"
-    echo -e "${CYAN}${BOLD}=========================================${NC}"
-    
-    if is_running; then
-        pid=$(get_pid)
-        echo -e "${GREEN}Status:${NC} ✅ Running"
-        echo -e "${GREEN}PID:${NC}    ${pid}"
-        if [ -f "${BASE_DIR}/nohup.out" ]; then
-            echo -e "${GREEN}Logs:${NC}   ${BASE_DIR}/nohup.out"
-        fi
+    if has_cow; then
+        cd "${BASE_DIR}"
+        cow status
     else
-        echo -e "${YELLOW}Status:${NC} ⭐ Stopped"
+        echo -e "${CYAN}${BOLD}=========================================${NC}"
+        echo -e "${CYAN}${BOLD}   ${EMOJI_COW} CowAgent Status${NC}"
+        echo -e "${CYAN}${BOLD}=========================================${NC}"
+
+        if is_running; then
+            pid=$(get_pid)
+            echo -e "${GREEN}Status:${NC} ✅ Running"
+            echo -e "${GREEN}PID:${NC}    ${pid}"
+            if [ -f "${BASE_DIR}/nohup.out" ]; then
+                echo -e "${GREEN}Logs:${NC}   ${BASE_DIR}/nohup.out"
+            fi
+        else
+            echo -e "${YELLOW}Status:${NC} ⭐ Stopped"
+        fi
+
+        if [ -f "${BASE_DIR}/config.json" ]; then
+            model=$(grep -o '"model"[[:space:]]*:[[:space:]]*"[^"]*"' "${BASE_DIR}/config.json" | cut -d'"' -f4)
+            channel=$(grep -o '"channel_type"[[:space:]]*:[[:space:]]*"[^"]*"' "${BASE_DIR}/config.json" | cut -d'"' -f4)
+            echo -e "${GREEN}Model:${NC}  ${model}"
+            echo -e "${GREEN}Channel:${NC} ${channel}"
+        fi
+
+        echo -e "${CYAN}${BOLD}=========================================${NC}"
     fi
-    
-    if [ -f "${BASE_DIR}/config.json" ]; then
-        model=$(grep -o '"model"[[:space:]]*:[[:space:]]*"[^"]*"' "${BASE_DIR}/config.json" | cut -d'"' -f4)
-        channel=$(grep -o '"channel_type"[[:space:]]*:[[:space:]]*"[^"]*"' "${BASE_DIR}/config.json" | cut -d'"' -f4)
-        echo -e "${GREEN}Model:${NC}  ${model}"
-        echo -e "${GREEN}Channel:${NC} ${channel}"
-    fi
-    
-    echo -e "${CYAN}${BOLD}=========================================${NC}"
 }
 
 # View logs
 cmd_logs() {
-    if [ -f "${BASE_DIR}/nohup.out" ]; then
-        echo -e "${YELLOW}Viewing logs (Ctrl+C to exit):${NC}"
-        tail -f "${BASE_DIR}/nohup.out"
+    if has_cow; then
+        cd "${BASE_DIR}"
+        cow logs -f
     else
-        echo -e "${RED}❌ Log file not found: ${BASE_DIR}/nohup.out${NC}"
+        if [ -f "${BASE_DIR}/nohup.out" ]; then
+            echo -e "${YELLOW}Viewing logs (Ctrl+C to exit):${NC}"
+            tail -f "${BASE_DIR}/nohup.out"
+        else
+            echo -e "${RED}❌ Log file not found: ${BASE_DIR}/nohup.out${NC}"
+        fi
     fi
 }
 
@@ -726,27 +794,43 @@ cmd_update() {
     echo -e "${GREEN}${EMOJI_WRENCH} Updating CowAgent...${NC}"
     cd "${BASE_DIR}"
     
-    # Stop service
-    if is_running; then
-        cmd_stop
-    fi
-    
-    # Update code
+    # Pull latest code first (service still running)
+    local pull_ok=false
     if [ -d .git ]; then
         echo -e "${GREEN}🔄 Pulling latest code...${NC}"
-        git pull || {
-            echo -e "${YELLOW}⚠️  GitHub failed, trying Gitee...${NC}"
+        if git pull; then
+            pull_ok=true
+        else
+            echo -e "${YELLOW}⚠️  git pull failed, trying Gitee mirror...${NC}"
             git remote set-url origin https://gitee.com/zhayujie/chatgpt-on-wechat.git
-            git pull
-        }
+            if git pull; then
+                pull_ok=true
+            else
+                echo -e "${RED}❌ Failed to pull code. Update aborted.${NC}"
+                exit 1
+            fi
+        fi
     else
         echo -e "${YELLOW}⚠️  Not a git repository, skipping code update${NC}"
     fi
     
+    # Re-exec with the updated run.sh to pick up new logic
+    exec "$0" _post_update
+}
+
+# Post-update: called by cmd_update after git pull to run with new code
+cmd_post_update() {
+    cd "${BASE_DIR}"
+
+    # Stop service
+    if is_running; then
+        cmd_stop
+    fi
+
     # Reinstall dependencies
     check_python_version
     install_dependencies
-    
+
     # Restart service
     cmd_start
 }
@@ -816,7 +900,7 @@ require_project_dir() {
 # Main function
 main() {
     case "$1" in
-        start|stop|restart|status|logs|config|update)
+        start|stop|restart|status|logs|config|update|_post_update)
             require_project_dir
             ;;
     esac
@@ -829,6 +913,7 @@ main() {
         logs)    cmd_logs ;;
         config)  cmd_config ;;
         update)  cmd_update ;;
+        _post_update) cmd_post_update ;;
         help|--help|-h)
             show_usage
             ;;

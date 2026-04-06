@@ -96,9 +96,43 @@ class WebChannel(ChatChannel):
                 logger.error(f"No session_id found for request {request_id}")
                 return
 
-            # SSE mode: push done event to SSE queue
+            # SSE mode: push events to SSE queue
             if request_id in self.sse_queues:
                 content = reply.content if reply.content is not None else ""
+
+                # Intermediate status lines (e.g. /install-browser phases) must NOT use "done",
+                # or the frontend closes EventSource and drops subsequent events.
+                if getattr(reply, "sse_phase", False):
+                    self.sse_queues[request_id].put({
+                        "type": "phase",
+                        "content": content,
+                        "request_id": request_id,
+                        "timestamp": time.time(),
+                    })
+                    logger.debug(f"SSE phase for request {request_id}")
+                    return
+
+                # Files are already pushed via on_event (file_to_send) during agent execution.
+                # Skip duplicate file pushes here; just let the done event through.
+                if reply.type in (ReplyType.IMAGE_URL, ReplyType.FILE) and content.startswith("file://"):
+                    text_content = getattr(reply, 'text_content', '')
+                    if text_content:
+                        self.sse_queues[request_id].put({
+                            "type": "done",
+                            "content": text_content,
+                            "request_id": request_id,
+                            "timestamp": time.time()
+                        })
+                    logger.debug(f"SSE skipped duplicate file for request {request_id}")
+                    return
+
+                # Skip http-URL FILE/IMAGE_URL replies produced by chat_channel's media extraction:
+                # the text reply (already sent as "done") contains the URL and the frontend will
+                # render it via renderMarkdown/injectVideoPlayers, so no separate SSE event needed.
+                if reply.type in (ReplyType.FILE, ReplyType.IMAGE_URL) and content.startswith(("http://", "https://")):
+                    logger.debug(f"SSE skipped http media reply for request {request_id}")
+                    return
+
                 self.sse_queues[request_id].put({
                     "type": "done",
                     "content": content,
@@ -159,6 +193,19 @@ class WebChannel(ChatChannel):
                     "status": status,
                     "result": result_str,
                     "execution_time": round(exec_time, 2)
+                })
+
+            elif event_type == "file_to_send":
+                file_path = data.get("path", "")
+                file_name = data.get("file_name", os.path.basename(file_path))
+                file_type = data.get("file_type", "file")
+                from urllib.parse import quote
+                web_url = f"/api/file?path={quote(file_path)}"
+                is_image = file_type == "image"
+                q.put({
+                    "type": "image" if is_image else "file",
+                    "content": web_url,
+                    "file_name": file_name,
                 })
 
         return on_event
@@ -353,13 +400,15 @@ class WebChannel(ChatChannel):
         # 打印可用渠道类型提示
         logger.info(
             "[WebChannel] 全部可用通道如下，可修改 config.json 配置文件中的 channel_type 字段进行切换，多个通道用逗号分隔：")
-        logger.info("[WebChannel]   1. web              - 网页")
-        logger.info("[WebChannel]   2. terminal         - 终端")
-        logger.info("[WebChannel]   3. feishu           - 飞书")
-        logger.info("[WebChannel]   4. dingtalk         - 钉钉")
-        logger.info("[WebChannel]   5. wechatcom_app    - 企微自建应用")
-        logger.info("[WebChannel]   6. wechatmp         - 个人公众号")
-        logger.info("[WebChannel]   7. wechatmp_service - 企业公众号")
+        logger.info("[WebChannel]   1. weixin           - 微信")
+        logger.info("[WebChannel]   2. web              - 网页")
+        logger.info("[WebChannel]   3. terminal         - 终端")
+        logger.info("[WebChannel]   4. feishu           - 飞书")
+        logger.info("[WebChannel]   5. dingtalk         - 钉钉")
+        logger.info("[WebChannel]   6. wecom_bot        - 企微智能机器人")
+        logger.info("[WebChannel]   7. wechatcom_app    - 企微自建应用")
+        logger.info("[WebChannel]   8. wechatmp         - 个人公众号")
+        logger.info("[WebChannel]   9. wechatmp_service - 企业公众号")
         logger.info("[WebChannel] ✅ Web控制台已运行")
         logger.info(f"[WebChannel] 🌐 本地访问: http://localhost:{port}")
         logger.info(f"[WebChannel] 🌍 服务器访问: http://YOUR_IP:{port} (请将YOUR_IP替换为服务器IP)")
@@ -375,11 +424,13 @@ class WebChannel(ChatChannel):
             '/message', 'MessageHandler',
             '/upload', 'UploadHandler',
             '/uploads/(.*)', 'UploadsHandler',
+            '/api/file', 'FileServeHandler',
             '/poll', 'PollHandler',
             '/stream', 'StreamHandler',
             '/chat', 'ChatHandler',
             '/config', 'ConfigHandler',
             '/api/channels', 'ChannelsHandler',
+            '/api/weixin/qrlogin', 'WeixinQrHandler',
             '/api/tools', 'ToolsHandler',
             '/api/skills', 'SkillsHandler',
             '/api/memory', 'MemoryHandler',
@@ -387,6 +438,7 @@ class WebChannel(ChatChannel):
             '/api/scheduler', 'SchedulerHandler',
             '/api/history', 'HistoryHandler',
             '/api/logs', 'LogsHandler',
+            '/api/version', 'VersionHandler',
             '/assets/(.*)', 'AssetsHandler',
         )
         app = web.application(urls, globals(), autoreload=False)
@@ -459,6 +511,32 @@ class UploadsHandler:
             raise web.notfound()
 
 
+class FileServeHandler:
+    def GET(self):
+        """Serve a local file by absolute path (for agent send tool)."""
+        try:
+            params = web.input(path="")
+            file_path = params.path
+            if not file_path or not os.path.isabs(file_path):
+                raise web.notfound()
+            file_path = os.path.normpath(file_path)
+            if not os.path.isfile(file_path):
+                raise web.notfound()
+            content_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+            file_name = os.path.basename(file_path)
+            from urllib.parse import quote
+            web.header('Content-Type', content_type)
+            web.header('Content-Disposition', f"inline; filename*=UTF-8''{quote(file_name)}")
+            web.header('Cache-Control', 'public, max-age=3600')
+            with open(file_path, 'rb') as f:
+                return f.read()
+        except web.HTTPError:
+            raise
+        except Exception as e:
+            logger.error(f"[WebChannel] Error serving file: {e}")
+            raise web.notfound()
+
+
 class PollHandler:
     def POST(self):
         return WebChannel().poll_response()
@@ -490,9 +568,9 @@ class ChatHandler:
 class ConfigHandler:
 
     _RECOMMENDED_MODELS = [
-        const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING,
-        const.GLM_5, const.GLM_4_7,
-        const.QWEN3_MAX, const.QWEN35_PLUS,
+        const.MINIMAX_M2_7, const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING,
+        const.GLM_5_TURBO, const.GLM_5, const.GLM_4_7,
+        const.QWEN36_PLUS, const.QWEN35_PLUS, const.QWEN3_MAX,
         const.KIMI_K2_5, const.KIMI_K2,
         const.DOUBAO_SEED_2_PRO, const.DOUBAO_SEED_2_CODE,
         const.CLAUDE_4_6_SONNET, const.CLAUDE_4_6_OPUS, const.CLAUDE_4_5_SONNET,
@@ -507,21 +585,21 @@ class ConfigHandler:
             "api_key_field": "minimax_api_key",
             "api_base_key": None,
             "api_base_default": None,
-            "models": [const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING],
+            "models": [const.MINIMAX_M2_7, const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING],
         }),
         ("zhipu", {
             "label": "智谱AI",
             "api_key_field": "zhipu_ai_api_key",
             "api_base_key": "zhipu_ai_api_base",
             "api_base_default": "https://open.bigmodel.cn/api/paas/v4",
-            "models": [const.GLM_5, const.GLM_4_7],
+            "models": [const.GLM_5_TURBO, const.GLM_5, const.GLM_4_7],
         }),
         ("dashscope", {
             "label": "通义千问",
             "api_key_field": "dashscope_api_key",
             "api_base_key": None,
             "api_base_default": None,
-            "models": [const.QWEN3_MAX, const.QWEN35_PLUS],
+            "models": [const.QWEN36_PLUS, const.QWEN35_PLUS, const.QWEN3_MAX],
         }),
         ("moonshot", {
             "label": "Kimi",
@@ -560,10 +638,17 @@ class ConfigHandler:
         }),
         ("deepseek", {
             "label": "DeepSeek",
-            "api_key_field": "open_ai_api_key",
+            "api_key_field": "deepseek_api_key",
+            "api_base_key": "deepseek_api_base",
+            "api_base_default": "https://api.deepseek.com/v1",
+            "models": [const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER],
+        }),
+        ("modelscope", {
+            "label": "ModelScope",
+            "api_key_field": "modelscope_api_key",
             "api_base_key": None,
             "api_base_default": None,
-            "models": [const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER],
+            "models": [const.QWEN3_5_27B, const.QWEN3_235B_A22B_INSTRUCT_2507],
         }),
         ("linkai", {
             "label": "LinkAI",
@@ -576,9 +661,9 @@ class ConfigHandler:
 
     EDITABLE_KEYS = {
         "model", "bot_type", "use_linkai",
-        "open_ai_api_base", "claude_api_base", "gemini_api_base",
+        "open_ai_api_base", "deepseek_api_base", "claude_api_base", "gemini_api_base",
         "zhipu_ai_api_base", "moonshot_base_url", "ark_base_url",
-        "open_ai_api_key", "claude_api_key", "gemini_api_key",
+        "open_ai_api_key", "deepseek_api_key", "claude_api_key", "gemini_api_key",
         "zhipu_ai_api_key", "dashscope_api_key", "moonshot_api_key",
         "ark_api_key", "minimax_api_key", "linkai_api_key",
         "agent_max_context_tokens", "agent_max_context_turns", "agent_max_steps",
@@ -685,6 +770,12 @@ class ChannelsHandler:
     """API for managing external channel configurations (feishu, dingtalk, etc)."""
 
     CHANNEL_DEFS = OrderedDict([
+        ("weixin", {
+            "label": {"zh": "微信", "en": "WeChat"},
+            "icon": "fa-comment",
+            "color": "emerald",
+            "fields": [],
+        }),
         ("feishu", {
             "label": {"zh": "飞书", "en": "Feishu"},
             "icon": "fa-paper-plane",
@@ -751,6 +842,20 @@ class ChannelsHandler:
     ])
 
     @staticmethod
+    def _get_weixin_login_status() -> str:
+        try:
+            import sys
+            app_module = sys.modules.get('__main__') or sys.modules.get('app')
+            mgr = getattr(app_module, '_channel_mgr', None) if app_module else None
+            if mgr:
+                ch = mgr.get_channel("weixin")
+                if ch and hasattr(ch, 'login_status'):
+                    return ch.login_status
+        except Exception:
+            pass
+        return "unknown"
+
+    @staticmethod
     def _mask_secret(value: str) -> str:
         if not value or len(value) <= 8:
             return value
@@ -789,14 +894,17 @@ class ChannelsHandler:
                         "value": display_val,
                         "default": f.get("default", ""),
                     })
-                channels.append({
+                ch_info = {
                     "name": ch_name,
                     "label": ch_def["label"],
                     "icon": ch_def["icon"],
                     "color": ch_def["color"],
                     "active": ch_name in active_channels,
                     "fields": fields_out,
-                })
+                }
+                if ch_name == "weixin" and ch_name in active_channels:
+                    ch_info["login_status"] = self._get_weixin_login_status()
+                channels.append(ch_info)
             return json.dumps({"status": "success", "channels": channels}, ensure_ascii=False)
         except Exception as e:
             logger.error(f"[WebChannel] Channels API error: {e}")
@@ -1016,6 +1124,157 @@ class ChannelsHandler:
         }, ensure_ascii=False)
 
 
+class WeixinQrHandler:
+    """Handle WeChat QR code login from the web console.
+
+    GET  /api/weixin/qrlogin          → fetch a new QR code
+    POST /api/weixin/qrlogin          → poll QR status or start channel after login
+    """
+
+    _qr_state = {}
+
+    @staticmethod
+    def _qr_to_data_uri(data: str) -> str:
+        """Generate a QR code as a PNG data URI."""
+        try:
+            import qrcode as qr_lib
+            import io
+            import base64
+            qr = qr_lib.QRCode(error_correction=qr_lib.constants.ERROR_CORRECT_L, box_size=6, border=2)
+            qr.add_data(data)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            return f"data:image/png;base64,{b64}"
+        except ImportError:
+            return ""
+
+    @staticmethod
+    def _get_running_channel():
+        try:
+            import sys
+            app_module = sys.modules.get('__main__') or sys.modules.get('app')
+            mgr = getattr(app_module, '_channel_mgr', None) if app_module else None
+            if mgr:
+                return mgr.get_channel("weixin")
+        except Exception:
+            pass
+        return None
+
+    def GET(self):
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            running_ch = self._get_running_channel()
+            if running_ch and hasattr(running_ch, '_current_qr_url') and running_ch._current_qr_url:
+                qr_image = self._qr_to_data_uri(running_ch._current_qr_url)
+                return json.dumps({
+                    "status": "success",
+                    "qrcode_url": running_ch._current_qr_url,
+                    "qr_image": qr_image,
+                    "source": "channel",
+                })
+
+            from channel.weixin.weixin_api import WeixinApi, DEFAULT_BASE_URL
+            base_url = conf().get("weixin_base_url", DEFAULT_BASE_URL)
+            api = WeixinApi(base_url=base_url)
+            qr_resp = api.fetch_qr_code()
+            qrcode = qr_resp.get("qrcode", "")
+            qrcode_url = qr_resp.get("qrcode_img_content", "")
+            if not qrcode:
+                return json.dumps({"status": "error", "message": "No QR code returned"})
+            qr_image = self._qr_to_data_uri(qrcode_url)
+            WeixinQrHandler._qr_state = {
+                "qrcode": qrcode,
+                "qrcode_url": qrcode_url,
+                "base_url": base_url,
+            }
+            return json.dumps({"status": "success", "qrcode_url": qrcode_url, "qr_image": qr_image})
+        except Exception as e:
+            logger.error(f"[WebChannel] WeixinQr GET error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    def POST(self):
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            body = json.loads(web.data())
+            action = body.get("action", "poll")
+
+            if action == "poll":
+                return self._poll_status()
+            elif action == "refresh":
+                return self.GET()
+            else:
+                return json.dumps({"status": "error", "message": f"unknown action: {action}"})
+        except Exception as e:
+            logger.error(f"[WebChannel] WeixinQr POST error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    def _poll_status(self):
+        state = WeixinQrHandler._qr_state
+        qrcode = state.get("qrcode", "")
+        base_url = state.get("base_url", "")
+        if not qrcode:
+            return json.dumps({"status": "error", "message": "No active QR session"})
+
+        from channel.weixin.weixin_api import WeixinApi, DEFAULT_BASE_URL
+        api = WeixinApi(base_url=base_url or DEFAULT_BASE_URL)
+        try:
+            status_resp = api.poll_qr_status(qrcode, timeout=10)
+        except Exception as e:
+            return json.dumps({"status": "error", "message": str(e)})
+
+        qr_status = status_resp.get("status", "wait")
+
+        if qr_status == "confirmed":
+            bot_token = status_resp.get("bot_token", "")
+            bot_id = status_resp.get("ilink_bot_id", "")
+            result_base_url = status_resp.get("baseurl", base_url)
+            user_id = status_resp.get("ilink_user_id", "")
+
+            if not bot_token or not bot_id:
+                return json.dumps({"status": "error", "message": "Login confirmed but missing token"})
+
+            cred_path = os.path.expanduser(
+                conf().get("weixin_credentials_path", "~/.weixin_cow_credentials.json")
+            )
+            from channel.weixin.weixin_channel import _save_credentials
+            _save_credentials(cred_path, {
+                "token": bot_token,
+                "base_url": result_base_url,
+                "bot_id": bot_id,
+                "user_id": user_id,
+            })
+            conf()["weixin_token"] = bot_token
+            conf()["weixin_base_url"] = result_base_url
+
+            WeixinQrHandler._qr_state = {}
+            logger.info(f"[WebChannel] WeChat QR login confirmed: bot_id={bot_id}")
+
+            return json.dumps({
+                "status": "success",
+                "qr_status": "confirmed",
+                "bot_id": bot_id,
+            })
+
+        if qr_status == "expired":
+            new_resp = api.fetch_qr_code()
+            new_qrcode = new_resp.get("qrcode", "")
+            new_qrcode_url = new_resp.get("qrcode_img_content", "")
+            new_qr_image = self._qr_to_data_uri(new_qrcode_url)
+            WeixinQrHandler._qr_state["qrcode"] = new_qrcode
+            WeixinQrHandler._qr_state["qrcode_url"] = new_qrcode_url
+            return json.dumps({
+                "status": "success",
+                "qr_status": "expired",
+                "qrcode_url": new_qrcode_url,
+                "qr_image": new_qr_image,
+            })
+
+        return json.dumps({"status": "success", "qr_status": qr_status})
+
+
 def _get_workspace_root():
     """Resolve the agent workspace directory."""
     from common.utils import expand_path
@@ -1113,6 +1372,8 @@ class MemoryContentHandler:
             service = MemoryService(workspace_root)
             result = service.get_content(params.filename)
             return json.dumps({"status": "success", **result}, ensure_ascii=False)
+        except ValueError:
+            return json.dumps({"status": "error", "message": "invalid filename"})
         except FileNotFoundError:
             return json.dumps({"status": "error", "message": "file not found"})
         except Exception as e:
@@ -1252,3 +1513,10 @@ class AssetsHandler:
         except Exception as e:
             logger.error(f"Error serving static file: {e}", exc_info=True)  # 添加更详细的错误信息
             raise web.notfound()
+
+
+class VersionHandler:
+    def GET(self):
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        from cli import __version__
+        return json.dumps({"version": __version__})

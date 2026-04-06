@@ -166,8 +166,8 @@
                     <i class="fas fa-bars text-slate-600 dark:text-slate-300"></i>
                 </button>
 
-                <!-- Breadcrumb -->
-                <div class="flex items-center gap-2 text-sm min-w-0">
+                <!-- Breadcrumb (hidden on mobile) -->
+                <div class="hidden lg:flex items-center gap-2 text-sm min-w-0">
                     <span id="breadcrumb-group" class="text-slate-400 dark:text-slate-500 truncate" data-i18n="nav_chat">Chat</span>
                     <i class="fas fa-chevron-right text-[10px] text-slate-300 dark:text-slate-600"></i>
                     <span id="breadcrumb-page" class="font-medium text-slate-700 dark:text-slate-200 truncate" data-i18n="menu_chat">Chat</span>
@@ -270,7 +270,7 @@
                         <div class="max-w-3xl mx-auto">
                             <!-- Attachment preview bar -->
                             <div id="attachment-preview" class="attachment-preview hidden"></div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 relative">
                                 <div class="flex items-center flex-shrink-0">
                                     <button id="new-chat-btn" class="w-9 h-10 flex items-center justify-center rounded-lg
                                                                      text-slate-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20
@@ -287,6 +287,7 @@
                                 </div>
                                 <input type="file" id="file-input" class="hidden" multiple
                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.xml,.zip,.rar,.7z,.py,.js,.ts,.java,.c,.cpp,.go,.rs,.md">
+                                <div id="slash-menu" class="slash-menu hidden"></div>
                                 <textarea id="chat-input"
                                           class="flex-1 min-w-0 px-4 py-[10px] rounded-xl border border-slate-200 dark:border-slate-600
                                                  bg-slate-50 dark:bg-white/5 text-slate-800 dark:text-slate-100
@@ -295,7 +296,7 @@
                                                  text-sm leading-relaxed"
                                           rows="1"
                                           data-i18n-placeholder="input_placeholder"
-                                          placeholder="Type a message..."></textarea>
+                                          placeholder="Type a message, or press / for commands"></textarea>
                                 <button id="send-btn"
                                         class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg
                                                bg-primary-400 text-white hover:bg-primary-500
@@ -454,6 +455,11 @@
                                     <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100" data-i18n="skills_title">Skills</h2>
                                     <p class="text-sm text-slate-500 dark:text-slate-400 mt-1" data-i18n="skills_desc">View, enable, or disable agent skills</p>
                                 </div>
+                                <a href="https://skills.cowagent.ai/" target="_blank"
+                                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary-500 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors">
+                                    <i class="fas fa-puzzle-piece text-[10px]"></i>
+                                    <span data-i18n="skills_hub_btn">Skill Hub</span>
+                                </a>
                             </div>
 
                             <!-- Built-in Tools Section -->

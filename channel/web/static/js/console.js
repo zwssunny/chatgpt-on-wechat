@@ -3,9 +3,9 @@
    ===================================================================== */
 
 // =====================================================================
-// Version — update this before each release
+// Version — fetched from backend (single source: /VERSION file)
 // =====================================================================
-const APP_VERSION = 'v2.0.3';
+let APP_VERSION = '';
 
 // =====================================================================
 // i18n
@@ -21,7 +21,7 @@ const I18N = {
         example_sys_title: '系统管理', example_sys_text: '帮我查看工作空间里有哪些文件',
         example_task_title: '技能系统', example_task_text: '查看所有支持的工具和技能',
         example_code_title: '编程助手', example_code_text: '帮我编写一个Python爬虫脚本',
-        input_placeholder: '输入消息...',
+        input_placeholder: '输入消息，或输入 / 使用指令',
         config_title: '配置管理', config_desc: '管理模型和 Agent 配置',
         config_model: '模型配置', config_agent: 'Agent 配置',
         config_channel: '通道配置',
@@ -33,7 +33,7 @@ const I18N = {
         config_save: '保存', config_saved: '已保存',
         config_save_error: '保存失败',
         config_custom_option: '自定义...',
-        skills_title: '技能管理', skills_desc: '查看、启用或禁用 Agent 技能',
+        skills_title: '技能管理', skills_desc: '查看、启用或禁用 Agent 技能', skills_hub_btn: '探索技能广场',
         skills_loading: '加载技能中...', skills_loading_desc: '技能加载后将显示在此处',
         tools_section_title: '内置工具', tools_loading: '加载工具中...',
         skills_section_title: '技能', skill_enable: '启用', skill_disable: '禁用',
@@ -51,6 +51,15 @@ const I18N = {
         channels_empty: '暂未接入任何通道', channels_empty_desc: '点击右上角「接入通道」按钮开始配置',
         channels_disconnect_confirm: '确认断开该通道？配置将保留但通道会停止运行。',
         channels_connected: '已接入', channels_connecting: '接入中...',
+        weixin_scan_title: '微信扫码登录', weixin_scan_desc: '请使用微信扫描下方二维码',
+        weixin_scan_loading: '正在获取二维码...', weixin_scan_waiting: '等待扫码...',
+        weixin_scan_scanned: '已扫码，请在手机上确认', weixin_scan_expired: '二维码已过期，正在刷新...',
+        weixin_scan_success: '登录成功，正在启动通道...', weixin_scan_fail: '获取二维码失败',
+        weixin_qr_tip: '二维码约2分钟后过期',
+        wecom_scan_btn: '扫码创建企微机器人', wecom_scan_desc: '使用企业微信扫码，一键创建智能机器人',
+        wecom_scan_success: '创建成功，正在启动通道...',
+        wecom_scan_fail: '创建失败',
+        wecom_mode_scan: '扫码接入', wecom_mode_manual: '手动填写',
         tasks_title: '定时任务', tasks_desc: '查看和管理定时任务',
         tasks_coming: '即将推出', tasks_coming_desc: '定时任务管理功能即将在此提供',
         logs_title: '日志', logs_desc: '实时日志输出 (run.log)',
@@ -67,7 +76,7 @@ const I18N = {
         example_sys_title: 'System', example_sys_text: 'Show me the files in the workspace',
         example_task_title: 'Skills', example_task_text: 'Show current tools and skills',
         example_code_title: 'Coding', example_code_text: 'Write a Python web scraper script',
-        input_placeholder: 'Type a message...',
+        input_placeholder: 'Type a message, or press / for commands',
         config_title: 'Configuration', config_desc: 'Manage model and agent settings',
         config_model: 'Model Configuration', config_agent: 'Agent Configuration',
         config_channel: 'Channel Configuration',
@@ -79,7 +88,7 @@ const I18N = {
         config_save: 'Save', config_saved: 'Saved',
         config_save_error: 'Save failed',
         config_custom_option: 'Custom...',
-        skills_title: 'Skills', skills_desc: 'View, enable, or disable agent skills',
+        skills_title: 'Skills', skills_desc: 'View, enable, or disable agent skills', skills_hub_btn: 'Skill Hub',
         skills_loading: 'Loading skills...', skills_loading_desc: 'Skills will be displayed here after loading',
         tools_section_title: 'Built-in Tools', tools_loading: 'Loading tools...',
         skills_section_title: 'Skills', skill_enable: 'Enable', skill_disable: 'Disable',
@@ -97,6 +106,15 @@ const I18N = {
         channels_empty: 'No channels connected', channels_empty_desc: 'Click the "Connect" button above to get started',
         channels_disconnect_confirm: 'Disconnect this channel? Config will be preserved but the channel will stop.',
         channels_connected: 'Connected', channels_connecting: 'Connecting...',
+        weixin_scan_title: 'WeChat QR Login', weixin_scan_desc: 'Scan the QR code below with WeChat',
+        weixin_scan_loading: 'Loading QR code...', weixin_scan_waiting: 'Waiting for scan...',
+        weixin_scan_scanned: 'Scanned, please confirm on your phone', weixin_scan_expired: 'QR code expired, refreshing...',
+        weixin_scan_success: 'Login successful, starting channel...', weixin_scan_fail: 'Failed to load QR code',
+        weixin_qr_tip: 'QR code expires in ~2 minutes',
+        wecom_scan_btn: 'Scan to Create WeCom Bot', wecom_scan_desc: 'Scan with WeCom to create a bot instantly',
+        wecom_scan_success: 'Bot created, starting channel...',
+        wecom_scan_fail: 'Bot creation failed',
+        wecom_mode_scan: 'Scan QR', wecom_mode_manual: 'Manual',
         tasks_title: 'Scheduled Tasks', tasks_desc: 'View and manage scheduled tasks',
         tasks_coming: 'Coming Soon', tasks_coming_desc: 'Scheduled task management will be available here',
         logs_title: 'Logs', logs_desc: 'Real-time log output (run.log)',
@@ -252,8 +270,42 @@ function createMd() {
 
 const md = createMd();
 
+const VIDEO_EXT_RE = /\.(?:mp4|webm|mov|avi|mkv)$/i;  // tested against URL without query string
+
+function _buildVideoHtml(url) {
+    const fileName = url.split('/').pop().split('?')[0];
+    return `<div style="margin:10px 0;">` +
+        `<video controls preload="metadata" ` +
+        `style="max-width:100%;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.15);display:block;">` +
+        `<source src="${url}"></video>` +
+        `<a href="${url}" target="_blank" ` +
+        `style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;color:#8b8fa8;text-decoration:none;">` +
+        `<i class="fas fa-download"></i> ${escapeHtml(fileName)}</a></div>`;
+}
+
+function injectVideoPlayers(html) {
+    // Step 1: replace markdown-it anchor tags whose href points to a video file.
+    const step1 = html.replace(
+        /<a\s+href="(https?:\/\/[^"]+)"[^>]*>[^<]*<\/a>/gi,
+        (match, url) => VIDEO_EXT_RE.test(url.split('?')[0]) ? _buildVideoHtml(url) : match
+    );
+    // Step 2: replace any remaining bare video URLs in text nodes (not inside HTML tags).
+    // Split on HTML tags to avoid touching src/href attributes already in markup.
+    return step1.split(/(<[^>]+>)/).map((chunk, idx) => {
+        // Even indices are text nodes; odd indices are HTML tags — leave them untouched.
+        if (idx % 2 !== 0) return chunk;
+        return chunk.replace(/https?:\/\/\S+/gi, (url) => {
+            const bare = url.replace(/[),.\s]+$/, '');  // strip trailing punctuation
+            return VIDEO_EXT_RE.test(bare.split('?')[0]) ? _buildVideoHtml(bare) : url;
+        });
+    }).join('');
+}
+
 function renderMarkdown(text) {
-    try { return md.render(text); }
+    try {
+        const html = md.render(text);
+        return injectVideoPlayers(html);
+    }
     catch (e) { return text.replace(/\n/g, '<br>'); }
 }
 
@@ -311,6 +363,11 @@ const attachmentPreview = document.getElementById('attachment-preview');
 // Items with _uploading=true are still in flight.
 let pendingAttachments = [];
 let uploadingCount = 0;
+
+// Input history (like terminal arrow-key recall)
+const inputHistory = [];
+let historyIdx = -1;
+let historySavedDraft = '';
 
 function updateSendBtnState() {
     sendBtn.disabled = uploadingCount > 0 || (!chatInput.value.trim() && pendingAttachments.length === 0);
@@ -425,6 +482,131 @@ chatInput.addEventListener('paste', (e) => {
 chatInput.addEventListener('compositionstart', () => { isComposing = true; });
 chatInput.addEventListener('compositionend', () => { setTimeout(() => { isComposing = false; }, 100); });
 
+// ── Slash Command Menu ───────────────────────────────────────
+const SLASH_COMMANDS = [
+    { cmd: '/help',                desc: '显示命令帮助' },
+    { cmd: '/status',              desc: '查看运行状态' },
+    { cmd: '/context',             desc: '查看对话上下文' },
+    { cmd: '/context clear',       desc: '清除对话上下文' },
+    { cmd: '/skill list',          desc: '查看已安装技能' },
+    { cmd: '/skill list --remote', desc: '浏览技能广场' },
+    { cmd: '/skill search ',       desc: '搜索技能' },
+    { cmd: '/skill install ',      desc: '安装技能 (名称或 GitHub URL)' },
+    { cmd: '/skill uninstall ',    desc: '卸载技能' },
+    { cmd: '/skill info ',         desc: '查看技能详情' },
+    { cmd: '/skill enable ',       desc: '启用技能' },
+    { cmd: '/skill disable ',      desc: '禁用技能' },
+    { cmd: '/config',              desc: '查看当前配置' },
+    { cmd: '/logs',                desc: '查看最近日志' },
+    { cmd: '/version',             desc: '查看版本' },
+];
+
+const slashMenu = document.getElementById('slash-menu');
+let slashActiveIdx = 0;
+let slashFiltered = [];
+let slashJustSelected = false;
+let slashLastFilter = '';
+let slashLastMouseX = -1;
+let slashLastMouseY = -1;
+
+function showSlashMenu(filter) {
+    const q = filter.toLowerCase();
+    if (q === slashLastFilter && !slashMenu.classList.contains('hidden')) return;
+    slashLastFilter = q;
+
+    const newFiltered = SLASH_COMMANDS.filter(c => c.cmd.toLowerCase().startsWith(q));
+    if (newFiltered.length === 0) {
+        hideSlashMenu();
+        return;
+    }
+
+    const changed = newFiltered.length !== slashFiltered.length ||
+        newFiltered.some((c, i) => c.cmd !== slashFiltered[i]?.cmd);
+    slashFiltered = newFiltered;
+    if (changed) slashActiveIdx = 0;
+    slashActiveIdx = Math.min(slashActiveIdx, slashFiltered.length - 1);
+
+    slashNavByKeyboard = true;
+    renderSlashItems();
+    slashMenu.classList.remove('hidden');
+}
+
+function hideSlashMenu() {
+    slashMenu.classList.add('hidden');
+    slashMenu.innerHTML = '';
+    slashFiltered = [];
+    slashActiveIdx = -1;
+    slashLastFilter = '';
+    slashNavByKeyboard = false;
+    slashLastMouseX = -1;
+    slashLastMouseY = -1;
+}
+
+function isSlashMenuVisible() {
+    return !slashMenu.classList.contains('hidden') && slashFiltered.length > 0;
+}
+
+function renderSlashItems() {
+    slashMenu.innerHTML =
+        '<div class="slash-menu-header">Commands</div>' +
+        slashFiltered.map((c, i) =>
+            `<div class="slash-menu-item${i === slashActiveIdx ? ' active' : ''}" data-idx="${i}">` +
+            `<span class="cmd">${escapeHtml(c.cmd)}</span>` +
+            `<span class="desc">${escapeHtml(c.desc)}</span></div>`
+        ).join('');
+
+    const activeEl = slashMenu.querySelector('.slash-menu-item.active');
+    if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+}
+
+// Delegated events on the persistent slashMenu container (not destroyed by innerHTML)
+// Use coordinate comparison to distinguish real mouse movement from DOM-rebuild phantom events.
+slashMenu.addEventListener('mousemove', (e) => {
+    if (e.clientX === slashLastMouseX && e.clientY === slashLastMouseY) return;
+    slashLastMouseX = e.clientX;
+    slashLastMouseY = e.clientY;
+    if (!slashNavByKeyboard) return;
+    slashNavByKeyboard = false;
+    const item = e.target.closest('.slash-menu-item');
+    if (!item) return;
+    const idx = parseInt(item.dataset.idx);
+    if (idx === slashActiveIdx) return;
+    slashActiveIdx = idx;
+    slashMenu.querySelectorAll('.slash-menu-item').forEach(el => {
+        el.classList.toggle('active', parseInt(el.dataset.idx) === idx);
+    });
+});
+
+slashMenu.addEventListener('mouseover', (e) => {
+    if (slashNavByKeyboard) return;
+    const item = e.target.closest('.slash-menu-item');
+    if (!item) return;
+    const idx = parseInt(item.dataset.idx);
+    if (idx === slashActiveIdx) return;
+    slashActiveIdx = idx;
+    slashMenu.querySelectorAll('.slash-menu-item').forEach(el => {
+        el.classList.toggle('active', parseInt(el.dataset.idx) === idx);
+    });
+});
+
+slashMenu.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.slash-menu-item');
+    if (!item) return;
+    e.preventDefault();
+    selectSlashCommand(parseInt(item.dataset.idx));
+});
+
+function selectSlashCommand(idx) {
+    if (idx < 0 || idx >= slashFiltered.length) return;
+    const chosen = slashFiltered[idx].cmd;
+    slashJustSelected = true;
+    chatInput.value = chosen;
+    chatInput.dispatchEvent(new Event('input'));
+    hideSlashMenu();
+    chatInput.focus();
+    chatInput.selectionStart = chatInput.selectionEnd = chosen.length;
+}
+
 chatInput.addEventListener('input', function() {
     this.style.height = '42px';
     const scrollH = this.scrollHeight;
@@ -432,11 +614,92 @@ chatInput.addEventListener('input', function() {
     this.style.height = newH + 'px';
     this.style.overflowY = scrollH > 180 ? 'auto' : 'hidden';
     updateSendBtnState();
+
+    const val = this.value;
+    if (slashJustSelected) {
+        slashJustSelected = false;
+    } else if (val.startsWith('/')) {
+        showSlashMenu(val);
+    } else {
+        hideSlashMenu();
+    }
 });
 
 chatInput.addEventListener('keydown', function(e) {
-    // keyCode 229 indicates an IME is processing the keystroke (reliable across browsers)
     if (e.keyCode === 229 || e.isComposing || isComposing) return;
+
+    if (isSlashMenuVisible()) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            slashNavByKeyboard = true;
+            slashActiveIdx = Math.min(slashActiveIdx + 1, slashFiltered.length - 1);
+            renderSlashItems();
+            return;
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            slashNavByKeyboard = true;
+            slashActiveIdx = Math.max(slashActiveIdx - 1, 0);
+            renderSlashItems();
+            return;
+        }
+        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+            e.preventDefault();
+            selectSlashCommand(slashActiveIdx);
+            return;
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            hideSlashMenu();
+            return;
+        }
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            selectSlashCommand(slashActiveIdx);
+            return;
+        }
+    }
+
+    // Arrow-key history recall (only when input is empty or already browsing history)
+    if (e.key === 'ArrowUp' && inputHistory.length > 0 && !isSlashMenuVisible()) {
+        const curVal = this.value.trim();
+        const isSingleLine = !this.value.includes('\n');
+        if (isSingleLine && (curVal === '' || historyIdx >= 0)) {
+            e.preventDefault();
+            if (historyIdx < 0) {
+                historySavedDraft = this.value;
+                historyIdx = inputHistory.length - 1;
+            } else if (historyIdx > 0) {
+                historyIdx--;
+            }
+            this.value = inputHistory[historyIdx];
+            slashJustSelected = true;
+            this.dispatchEvent(new Event('input'));
+            hideSlashMenu();
+            this.selectionStart = this.selectionEnd = this.value.length;
+            return;
+        }
+    }
+    if (e.key === 'ArrowDown' && historyIdx >= 0 && !isSlashMenuVisible()) {
+        const isSingleLine = !this.value.includes('\n');
+        if (isSingleLine) {
+            e.preventDefault();
+            if (historyIdx < inputHistory.length - 1) {
+                historyIdx++;
+                this.value = inputHistory[historyIdx];
+            } else {
+                historyIdx = -1;
+                this.value = historySavedDraft;
+                historySavedDraft = '';
+            }
+            slashJustSelected = true;
+            this.dispatchEvent(new Event('input'));
+            hideSlashMenu();
+            this.selectionStart = this.selectionEnd = this.value.length;
+            return;
+        }
+    }
+
     if ((e.ctrlKey || e.shiftKey) && e.key === 'Enter') {
         const start = this.selectionStart;
         const end = this.selectionEnd;
@@ -448,6 +711,10 @@ chatInput.addEventListener('keydown', function(e) {
         sendMessage();
         e.preventDefault();
     }
+});
+
+chatInput.addEventListener('blur', () => {
+    setTimeout(hideSlashMenu, 150);
 });
 
 document.querySelectorAll('.example-card').forEach(card => {
@@ -464,6 +731,12 @@ document.querySelectorAll('.example-card').forEach(card => {
 function sendMessage() {
     const text = chatInput.value.trim();
     if (!text && pendingAttachments.length === 0) return;
+
+    if (text) {
+        inputHistory.push(text);
+        historyIdx = -1;
+        historySavedDraft = '';
+    }
 
     const ws = document.getElementById('welcome-screen');
     if (ws) ws.remove();
@@ -522,6 +795,7 @@ function startSSE(requestId, loadingEl, timestamp) {
     let botEl = null;
     let stepsEl = null;    // .agent-steps  (thinking summaries + tool indicators)
     let contentEl = null;  // .answer-content (final streaming answer)
+    let mediaEl = null;    // .media-content (images & file attachments)
     let accumulatedText = '';
     let currentToolEl = null;
 
@@ -537,6 +811,7 @@ function startSSE(requestId, loadingEl, timestamp) {
                 <div class="bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3 text-sm leading-relaxed msg-content text-slate-700 dark:text-slate-200">
                     <div class="agent-steps"></div>
                     <div class="answer-content sse-streaming"></div>
+                    <div class="media-content"></div>
                 </div>
                 <div class="text-xs text-slate-400 dark:text-slate-500 mt-1.5">${formatTime(timestamp)}</div>
             </div>
@@ -544,6 +819,7 @@ function startSSE(requestId, loadingEl, timestamp) {
         messagesDiv.appendChild(botEl);
         stepsEl = botEl.querySelector('.agent-steps');
         contentEl = botEl.querySelector('.answer-content');
+        mediaEl = botEl.querySelector('.media-content');
     }
 
     es.onmessage = function(e) {
@@ -634,10 +910,59 @@ function startSSE(requestId, loadingEl, timestamp) {
                 currentToolEl = null;
             }
 
+        } else if (item.type === 'image') {
+            ensureBotEl();
+            const imgEl = document.createElement('img');
+            imgEl.src = item.content;
+            imgEl.alt = 'screenshot';
+            imgEl.style.cssText = 'max-width:600px;border-radius:8px;margin:8px 0;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.1);';
+            imgEl.onclick = () => window.open(item.content, '_blank');
+            mediaEl.appendChild(imgEl);
+            scrollChatToBottom();
+
+        } else if (item.type === 'text') {
+            // Intermediate text sent before media items; display it but keep SSE open.
+            ensureBotEl();
+            contentEl.classList.remove('sse-streaming');
+            const textContent = item.content || accumulatedText;
+            if (textContent) contentEl.innerHTML = renderMarkdown(textContent);
+            applyHighlighting(botEl);
+            scrollChatToBottom();
+
+        } else if (item.type === 'video') {
+            ensureBotEl();
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = _buildVideoHtml(item.content);
+            mediaEl.appendChild(wrapper.firstElementChild || wrapper);
+            scrollChatToBottom();
+
+        } else if (item.type === 'file') {
+            ensureBotEl();
+            const fileName = item.file_name || item.content.split('/').pop();
+            const fileEl = document.createElement('a');
+            fileEl.href = item.content;
+            fileEl.download = fileName;
+            fileEl.target = '_blank';
+            fileEl.className = 'file-attachment';
+            fileEl.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;margin:8px 0;border-radius:8px;background:var(--bg-secondary,#f3f4f6);color:var(--text-primary,#374151);text-decoration:none;font-size:14px;border:1px solid var(--border-color,#e5e7eb);';
+            fileEl.innerHTML = `<i class="fas fa-file-download" style="color:#6b7280;"></i> ${fileName}`;
+            mediaEl.appendChild(fileEl);
+            scrollChatToBottom();
+
+        } else if (item.type === 'phase') {
+            // Coarse progress (e.g. cow install-browser); must not close SSE (unlike "done")
+            ensureBotEl();
+            const wrap = document.createElement('div');
+            wrap.className = 'text-xs sm:text-sm text-slate-600 dark:text-slate-400 border-l-2 border-primary-400 pl-2 py-1 my-0.5';
+            wrap.textContent = String(item.content || '');
+            stepsEl.appendChild(wrap);
+            scrollChatToBottom();
+
         } else if (item.type === 'done') {
             es.close();
             delete activeStreams[requestId];
 
+            // item.content may be empty when "done" is only a stream-close signal after media.
             const finalText = item.content || accumulatedText;
 
             if (!botEl && finalText) {
@@ -645,6 +970,7 @@ function startSSE(requestId, loadingEl, timestamp) {
                 addBotMessage(finalText, new Date((item.timestamp || Date.now() / 1000) * 1000), requestId);
             } else if (botEl) {
                 contentEl.classList.remove('sse-streaming');
+                // Only update text content when there is something new to show.
                 if (finalText) contentEl.innerHTML = renderMarkdown(finalText);
                 applyHighlighting(botEl);
             }
@@ -722,7 +1048,7 @@ function createUserMessageEl(content, timestamp, attachments) {
     const textHtml = content ? renderMarkdown(content) : '';
     el.innerHTML = `
         <div class="max-w-[75%] sm:max-w-[60%]">
-            <div class="bg-primary-400 text-white rounded-2xl px-4 py-2.5 text-sm leading-relaxed msg-content">
+            <div class="bg-primary-400 text-white rounded-2xl px-4 py-2.5 text-sm leading-relaxed msg-content user-bubble">
                 ${attachHtml}${textHtml}
             </div>
             <div class="text-xs text-slate-400 dark:text-slate-500 mt-1.5 text-right">${formatTime(timestamp)}</div>
@@ -1418,7 +1744,7 @@ function renderSkillCard(card, sk) {
         </div>
         <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1">
-                <span class="font-medium text-sm text-slate-700 dark:text-slate-200 truncate flex-1">${escapeHtml(sk.name)}</span>
+                <span class="font-medium text-sm text-slate-700 dark:text-slate-200 truncate flex-1">${escapeHtml(sk.display_name || sk.name)}</span>
                 <button
                     role="switch"
                     aria-checked="${enabled}"
@@ -1583,6 +1909,8 @@ function loadChannelsView() {
 }
 
 function renderActiveChannels() {
+    stopWeixinQrPoll();
+    stopWeixinStatusPoll();
     const container = document.getElementById('channels-content');
     container.innerHTML = '';
     closeAddChannelPanel();
@@ -1608,17 +1936,34 @@ function renderActiveChannels() {
         card.id = `channel-card-${ch.name}`;
 
         const fieldsHtml = buildChannelFieldsHtml(ch.name, ch.fields || []);
+        const hasFields = (ch.fields || []).length > 0;
+
+        const weixinWaiting = ch.name === 'weixin' && ch.login_status && ch.login_status !== 'logged_in';
+        const wecomNeedsCreds = ch.name === 'wecom_bot' && !_wecomBotHasCreds(ch);
+        let statusDot, statusText;
+        if (weixinWaiting) {
+            statusDot = 'bg-amber-400 animate-pulse';
+            statusText = ch.login_status === 'scanned'
+                ? `<span class="text-xs text-primary-500">${t('weixin_scan_scanned')}</span>`
+                : `<span class="text-xs text-amber-500">${t('weixin_scan_waiting')}</span>`;
+        } else if (wecomNeedsCreds) {
+            statusDot = 'bg-amber-400 animate-pulse';
+            statusText = `<span class="text-xs text-amber-500">${t('channels_connecting')}</span>`;
+        } else {
+            statusDot = 'bg-primary-400';
+            statusText = `<span class="text-xs text-primary-500">${t('channels_connected')}</span>`;
+        }
 
         card.innerHTML = `
-            <div class="flex items-center gap-4 mb-5">
+            <div class="flex items-center gap-4${hasFields || weixinWaiting || wecomNeedsCreds ? ' mb-5' : ''}">
                 <div class="w-10 h-10 rounded-xl bg-${ch.color}-50 dark:bg-${ch.color}-900/20 flex items-center justify-center flex-shrink-0">
                     <i class="fas ${ch.icon} text-${ch.color}-500 text-base"></i>
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2">
                         <span class="font-semibold text-slate-800 dark:text-slate-100">${escapeHtml(label)}</span>
-                        <span class="w-2 h-2 rounded-full bg-primary-400"></span>
-                        <span class="text-xs text-primary-500">${t('channels_connected')}</span>
+                        <span class="w-2 h-2 rounded-full ${statusDot}"></span>
+                        ${statusText}
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">${escapeHtml(ch.name)}</p>
                 </div>
@@ -1630,7 +1975,23 @@ function renderActiveChannels() {
                     ${t('channels_disconnect')}
                 </button>
             </div>
-            <div class="space-y-4">
+            ${weixinWaiting ? `<div id="weixin-active-qr" class="flex flex-col items-center py-2">
+                <button onclick="showWeixinActiveQr()"
+                    class="px-4 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium
+                           cursor-pointer transition-colors duration-150">
+                    ${t('weixin_scan_title')}
+                </button>
+            </div>` : ''}
+            ${wecomNeedsCreds ? `<div id="wecom-active-auth" class="flex flex-col items-center py-2">
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-3">${t('wecom_scan_desc')}</p>
+                <button onclick="startWecomBotAuthInCard()"
+                    class="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium
+                           cursor-pointer transition-colors duration-150">
+                    <i class="fas fa-qrcode mr-2"></i>${t('wecom_scan_btn')}
+                </button>
+                <div id="wecom-card-scan-status" class="mt-3"></div>
+            </div>` : ''}
+            ${hasFields ? `<div class="space-y-4">
                 ${fieldsHtml}
                 <div class="flex items-center justify-end gap-3 pt-1">
                     <span id="ch-status-${ch.name}" class="text-xs text-primary-500 opacity-0 transition-opacity duration-300"></span>
@@ -1639,10 +2000,14 @@ function renderActiveChannels() {
                                cursor-pointer transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                         id="ch-save-${ch.name}">${t('channels_save')}</button>
                 </div>
-            </div>`;
+            </div>` : ''}`;
 
         container.appendChild(card);
         bindSecretFieldEvents(card);
+
+        if (weixinWaiting) {
+            startWeixinActiveStatusPoll();
+        }
     });
 }
 
@@ -1774,6 +2139,9 @@ function openAddChannelPanel() {
     const activeNames = new Set(channelsData.filter(c => c.active).map(c => c.name));
     const available = channelsData.filter(c => !activeNames.has(c.name));
 
+    const content = document.getElementById('channels-content');
+    if (activeNames.size === 0 && content) content.classList.add('hidden');
+
     if (available.length === 0) {
         panel.innerHTML = `<div class="bg-white dark:bg-[#1A1A1A] rounded-xl border border-slate-200 dark:border-white/10 p-6 text-center">
             <p class="text-sm text-slate-500 dark:text-slate-400">${currentLang === 'zh' ? '所有通道均已接入' : 'All channels are already connected'}</p>
@@ -1828,20 +2196,41 @@ function openAddChannelPanel() {
 }
 
 function closeAddChannelPanel() {
+    stopWeixinQrPoll();
     const panel = document.getElementById('channels-add-panel');
     if (panel) {
         panel.classList.add('hidden');
         panel.innerHTML = '';
     }
+    const content = document.getElementById('channels-content');
+    if (content) content.classList.remove('hidden');
 }
 
 function onAddChannelSelect(chName) {
+    stopWeixinQrPoll();
     const fieldsContainer = document.getElementById('add-channel-fields');
     const actions = document.getElementById('add-channel-actions');
 
     if (!chName) {
         fieldsContainer.innerHTML = '';
         actions.classList.add('hidden');
+        return;
+    }
+
+    if (chName === 'weixin') {
+        actions.classList.add('hidden');
+        fieldsContainer.innerHTML = `
+            <div id="weixin-qr-panel" class="flex flex-col items-center py-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">${t('weixin_scan_loading')}</p>
+            </div>`;
+        startWeixinQrLogin();
+        return;
+    }
+
+    if (chName === 'wecom_bot') {
+        actions.classList.add('hidden');
+        const ch = channelsData.find(c => c.name === chName);
+        fieldsContainer.innerHTML = buildWecomBotPanel(ch);
         return;
     }
 
@@ -1899,6 +2288,357 @@ function submitAddChannel() {
         if (btn) { btn.disabled = false; btn.textContent = t('channels_connect_btn'); }
     });
 }
+
+// =====================================================================
+// WeChat QR Login
+// =====================================================================
+let _weixinQrPollTimer = null;
+let _weixinStatusPollTimer = null;
+
+function stopWeixinStatusPoll() {
+    if (_weixinStatusPollTimer) {
+        clearTimeout(_weixinStatusPollTimer);
+        _weixinStatusPollTimer = null;
+    }
+}
+
+function startWeixinActiveStatusPoll() {
+    stopWeixinStatusPoll();
+    _weixinStatusPollTimer = setTimeout(() => {
+        fetch('/api/channels').then(r => r.json()).then(data => {
+            if (data.status !== 'success') return;
+            const wx = (data.channels || []).find(c => c.name === 'weixin');
+            if (!wx || !wx.active) return;
+            if (wx.login_status === 'logged_in') {
+                channelsData = data.channels;
+                renderActiveChannels();
+            } else {
+                const ch = channelsData.find(c => c.name === 'weixin');
+                if (ch) ch.login_status = wx.login_status;
+                startWeixinActiveStatusPoll();
+            }
+        }).catch(() => { startWeixinActiveStatusPoll(); });
+    }, 3000);
+}
+
+function showWeixinActiveQr() {
+    const container = document.getElementById('weixin-active-qr');
+    if (!container) return;
+    container.innerHTML = `
+        <div id="weixin-qr-panel" class="flex flex-col items-center py-2">
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">${t('weixin_scan_loading')}</p>
+        </div>`;
+    stopWeixinStatusPoll();
+    startWeixinQrLogin();
+}
+
+function stopWeixinQrPoll() {
+    if (_weixinQrPollTimer) {
+        clearTimeout(_weixinQrPollTimer);
+        _weixinQrPollTimer = null;
+    }
+}
+
+function startWeixinQrLogin() {
+    stopWeixinQrPoll();
+    fetch('/api/weixin/qrlogin')
+        .then(r => r.json())
+        .then(data => {
+            const panel = document.getElementById('weixin-qr-panel');
+            if (!panel) return;
+            if (data.status !== 'success') {
+                panel.innerHTML = `<p class="text-sm text-red-500">${t('weixin_scan_fail')}: ${data.message || ''}</p>`;
+                return;
+            }
+            renderWeixinQr(data.qr_image || data.qrcode_url, 'waiting');
+            if (data.source === 'channel') {
+                startWeixinActiveStatusPoll();
+            } else {
+                pollWeixinQrStatus();
+            }
+        })
+        .catch(() => {
+            const panel = document.getElementById('weixin-qr-panel');
+            if (panel) panel.innerHTML = `<p class="text-sm text-red-500">${t('weixin_scan_fail')}</p>`;
+        });
+}
+
+function renderWeixinQr(qrcodeUrl, status) {
+    const panel = document.getElementById('weixin-qr-panel');
+    if (!panel) return;
+
+    let statusText = t('weixin_scan_waiting');
+    let statusColor = 'text-slate-500 dark:text-slate-400';
+    if (status === 'scanned') {
+        statusText = t('weixin_scan_scanned');
+        statusColor = 'text-primary-500';
+    } else if (status === 'expired') {
+        statusText = t('weixin_scan_expired');
+        statusColor = 'text-amber-500';
+    } else if (status === 'confirmed') {
+        statusText = t('weixin_scan_success');
+        statusColor = 'text-primary-500';
+    }
+
+    panel.innerHTML = `
+        <div class="flex flex-col items-center">
+            <p class="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">${t('weixin_scan_title')}</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500 mb-4">${t('weixin_scan_desc')}</p>
+            <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 mb-3">
+                <img src="${escapeHtml(qrcodeUrl)}" alt="QR Code" class="w-52 h-52" style="image-rendering: pixelated;"/>
+            </div>
+            <p class="text-xs ${statusColor} mb-1">${statusText}</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500">${t('weixin_qr_tip')}</p>
+        </div>`;
+}
+
+function pollWeixinQrStatus() {
+    _weixinQrPollTimer = setTimeout(() => {
+        fetch('/api/weixin/qrlogin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'poll' })
+        })
+        .then(r => r.json())
+        .then(data => {
+            const panel = document.getElementById('weixin-qr-panel');
+            if (!panel) { stopWeixinQrPoll(); return; }
+
+            if (data.status !== 'success') {
+                pollWeixinQrStatus();
+                return;
+            }
+
+            const qrStatus = data.qr_status;
+            if (qrStatus === 'confirmed') {
+                renderWeixinQr('', 'confirmed');
+                panel.innerHTML = `
+                    <div class="flex flex-col items-center py-4">
+                        <div class="w-12 h-12 rounded-full bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center mb-3">
+                            <i class="fas fa-check text-primary-500 text-lg"></i>
+                        </div>
+                        <p class="text-sm font-medium text-primary-600 dark:text-primary-400">${t('weixin_scan_success')}</p>
+                    </div>`;
+                connectWeixinAfterQr();
+            } else if (qrStatus === 'expired' && (data.qr_image || data.qrcode_url)) {
+                renderWeixinQr(data.qr_image || data.qrcode_url, 'waiting');
+                pollWeixinQrStatus();
+            } else if (qrStatus === 'scaned') {
+                const img = panel.querySelector('img');
+                const currentSrc = img ? img.src : '';
+                renderWeixinQr(currentSrc, 'scanned');
+                pollWeixinQrStatus();
+            } else {
+                pollWeixinQrStatus();
+            }
+        })
+        .catch(() => {
+            pollWeixinQrStatus();
+        });
+    }, 2000);
+}
+
+function connectWeixinAfterQr() {
+    fetch('/api/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'connect', channel: 'weixin', config: {} })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const ch = channelsData.find(c => c.name === 'weixin');
+            if (ch) ch.active = true;
+            setTimeout(() => renderActiveChannels(), 1500);
+        }
+    })
+    .catch(() => {});
+}
+
+// =====================================================================
+// WeCom Bot QR Auth
+// =====================================================================
+const WECOM_BOT_SDK_URL = 'https://wwcdn.weixin.qq.com/node/wework/js/wecom-aibot-sdk@0.1.0.min.js';
+const WECOM_BOT_SOURCE = 'cowagent';
+let _wecomSdkLoaded = false;
+
+function ensureWecomSdkLoaded() {
+    return new Promise((resolve, reject) => {
+        if (_wecomSdkLoaded && window.WecomAIBotSDK) { resolve(); return; }
+        if (document.querySelector(`script[src="${WECOM_BOT_SDK_URL}"]`)) {
+            _wecomSdkLoaded = true; resolve(); return;
+        }
+        const s = document.createElement('script');
+        s.src = WECOM_BOT_SDK_URL;
+        s.onload = () => { _wecomSdkLoaded = true; resolve(); };
+        s.onerror = () => reject(new Error('Failed to load WecomAIBotSDK'));
+        document.head.appendChild(s);
+    });
+}
+
+function _wecomBotHasCreds(ch) {
+    if (!ch || !ch.fields) return false;
+    const idField = ch.fields.find(f => f.key === 'wecom_bot_id');
+    const secretField = ch.fields.find(f => f.key === 'wecom_bot_secret');
+    return !!(idField && idField.value && secretField && secretField.value);
+}
+
+function buildWecomBotPanel(ch) {
+    const scanLabel = t('wecom_mode_scan');
+    const manualLabel = t('wecom_mode_manual');
+    const hasCreds = _wecomBotHasCreds(ch);
+    const defaultMode = hasCreds ? 'manual' : 'scan';
+    return `
+        <div id="wecom-bot-panel" data-default-mode="${defaultMode}">
+            <div class="flex items-center justify-center gap-1 mb-5 bg-slate-100 dark:bg-white/5 rounded-lg p-1">
+                <button id="wecom-tab-scan" onclick="switchWecomBotMode('scan')"
+                    class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                           bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm">
+                    ${scanLabel}
+                </button>
+                <button id="wecom-tab-manual" onclick="switchWecomBotMode('manual')"
+                    class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                           text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                    ${manualLabel}
+                </button>
+            </div>
+            <div id="wecom-mode-content"></div>
+        </div>`;
+}
+
+function switchWecomBotMode(mode) {
+    const scanTab = document.getElementById('wecom-tab-scan');
+    const manualTab = document.getElementById('wecom-tab-manual');
+    const content = document.getElementById('wecom-mode-content');
+    const actions = document.getElementById('add-channel-actions');
+    if (!scanTab || !manualTab || !content) return;
+
+    const activeClasses = 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm';
+    const inactiveClasses = 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200';
+
+    if (mode === 'scan') {
+        scanTab.className = scanTab.className.replace(/text-slate-500[^\s]*/g, '').replace(/hover:\S+/g, '');
+        scanTab.className = `flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${activeClasses}`;
+        manualTab.className = `flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${inactiveClasses}`;
+        actions.classList.add('hidden');
+        content.innerHTML = `
+            <div class="flex flex-col items-center py-4">
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-2">${t('wecom_scan_desc')}</p>
+                <button onclick="startWecomBotAuth()"
+                    class="mt-3 px-6 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium
+                           cursor-pointer transition-colors duration-150">
+                    <i class="fas fa-qrcode mr-2"></i>${t('wecom_scan_btn')}
+                </button>
+                <div id="wecom-scan-status" class="mt-3"></div>
+            </div>`;
+    } else {
+        manualTab.className = `flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${activeClasses}`;
+        scanTab.className = `flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${inactiveClasses}`;
+        const ch = channelsData.find(c => c.name === 'wecom_bot');
+        content.innerHTML = `<div class="space-y-4">${buildChannelFieldsHtml('wecom_bot', ch ? ch.fields || [] : [])}</div>`;
+        bindSecretFieldEvents(content);
+        actions.classList.remove('hidden');
+    }
+}
+
+function startWecomBotAuth() {
+    const statusEl = document.getElementById('wecom-scan-status');
+    ensureWecomSdkLoaded().then(() => {
+        WecomAIBotSDK.openBotInfoAuthWindow({
+            source: WECOM_BOT_SOURCE,
+            onCreated: function(bot) {
+                if (statusEl) {
+                    statusEl.innerHTML = `
+                        <div class="flex flex-col items-center py-2">
+                            <div class="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-2">
+                                <i class="fas fa-check text-emerald-500 text-lg"></i>
+                            </div>
+                            <p class="text-sm font-medium text-emerald-600 dark:text-emerald-400">${t('wecom_scan_success')}</p>
+                        </div>`;
+                }
+                connectWecomBotAfterAuth(bot.botid, bot.secret);
+            },
+            onError: function(err) {
+                if (statusEl) {
+                    statusEl.innerHTML = `<p class="text-sm text-red-500">${t('wecom_scan_fail')}: ${err.message || err.code || ''}</p>`;
+                }
+            }
+        });
+    }).catch(err => {
+        if (statusEl) {
+            statusEl.innerHTML = `<p class="text-sm text-red-500">SDK load failed: ${err.message}</p>`;
+        }
+    });
+}
+
+function connectWecomBotAfterAuth(botId, secret) {
+    fetch('/api/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'connect',
+            channel: 'wecom_bot',
+            config: { wecom_bot_id: botId, wecom_bot_secret: secret }
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const ch = channelsData.find(c => c.name === 'wecom_bot');
+            if (ch) {
+                ch.active = true;
+                (ch.fields || []).forEach(f => {
+                    if (f.key === 'wecom_bot_id') f.value = botId;
+                    if (f.key === 'wecom_bot_secret') f.value = ChannelsHandler_maskSecret(secret);
+                });
+            }
+            setTimeout(() => renderActiveChannels(), 1500);
+        }
+    })
+    .catch(() => {});
+}
+
+function startWecomBotAuthInCard() {
+    const statusEl = document.getElementById('wecom-card-scan-status');
+    ensureWecomSdkLoaded().then(() => {
+        WecomAIBotSDK.openBotInfoAuthWindow({
+            source: WECOM_BOT_SOURCE,
+            onCreated: function(bot) {
+                if (statusEl) {
+                    statusEl.innerHTML = `
+                        <div class="flex flex-col items-center py-2">
+                            <div class="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-2">
+                                <i class="fas fa-check text-emerald-500 text-lg"></i>
+                            </div>
+                            <p class="text-sm font-medium text-emerald-600 dark:text-emerald-400">${t('wecom_scan_success')}</p>
+                        </div>`;
+                }
+                connectWecomBotAfterAuth(bot.botid, bot.secret);
+            },
+            onError: function(err) {
+                if (statusEl) {
+                    statusEl.innerHTML = `<p class="text-sm text-red-500">${t('wecom_scan_fail')}: ${err.message || err.code || ''}</p>`;
+                }
+            }
+        });
+    }).catch(err => {
+        if (statusEl) {
+            statusEl.innerHTML = `<p class="text-sm text-red-500">SDK load failed: ${err.message}</p>`;
+        }
+    });
+}
+
+// Initialize wecom bot panel with correct default mode when inserted into DOM
+document.addEventListener('DOMContentLoaded', function() {
+    const observer = new MutationObserver(function() {
+        const panel = document.getElementById('wecom-bot-panel');
+        if (panel && !panel.dataset.initialized) {
+            panel.dataset.initialized = '1';
+            switchWecomBotMode(panel.dataset.defaultMode || 'scan');
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+});
 
 // =====================================================================
 // Scheduler View
@@ -2017,7 +2757,12 @@ navigateTo = function(viewId) {
 // =====================================================================
 applyTheme();
 applyI18n();
-document.getElementById('sidebar-version').textContent = `CowAgent ${APP_VERSION}`;
+fetch('/api/version').then(r => r.json()).then(data => {
+    APP_VERSION = `v${data.version}`;
+    document.getElementById('sidebar-version').textContent = `CowAgent ${APP_VERSION}`;
+}).catch(() => {
+    document.getElementById('sidebar-version').textContent = 'CowAgent';
+});
 chatInput.focus();
 
 // Re-enable color transition AFTER first paint so the theme applied in <head>

@@ -17,7 +17,11 @@ def create_bot(bot_type):
         from models.baidu.baidu_wenxin import BaiduWenxinBot
         return BaiduWenxinBot()
 
-    elif bot_type in (const.OPENAI, const.CHATGPT, const.DEEPSEEK):  # OpenAI-compatible API
+    elif bot_type == const.DEEPSEEK:
+        from models.deepseek.deepseek_bot import DeepSeekBot
+        return DeepSeekBot()
+
+    elif bot_type in (const.OPENAI, const.CHATGPT):  # OpenAI-compatible API
         from models.chatgpt.chat_gpt_bot import ChatGPTBot
         return ChatGPTBot()
 
@@ -42,10 +46,7 @@ def create_bot(bot_type):
     elif bot_type == const.CLAUDEAPI:
         from models.claudeapi.claude_api_bot import ClaudeAPIBot
         return ClaudeAPIBot()
-    elif bot_type == const.QWEN:
-        from models.ali.ali_qwen_bot import AliQwenBot
-        return AliQwenBot()
-    elif bot_type == const.QWEN_DASHSCOPE:
+    elif bot_type in (const.QWEN, const.QWEN_DASHSCOPE):
         from models.dashscope.dashscope_bot import DashscopeBot
         return DashscopeBot()
     elif bot_type == const.GEMINI:

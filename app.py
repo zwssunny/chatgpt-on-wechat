@@ -78,7 +78,13 @@ class ChannelManager:
             if first_start:
                 PluginManager().load_plugins()
 
-                if conf().get("use_linkai"):
+                # Cloud client is optional. It is only started when
+                # use_linkai=True AND cloud_deployment_id is set.
+                # By default neither is configured, so the app runs
+                # entirely locally without any remote connection.
+                if conf().get("use_linkai") and (
+                    os.environ.get("CLOUD_DEPLOYMENT_ID") or conf().get("cloud_deployment_id")
+                ):
                     try:
                         from common import cloud_client
                         threading.Thread(
@@ -229,6 +235,8 @@ def _clear_singleton_cache(channel_name: str):
         const.DINGTALK: "channel.dingtalk.dingtalk_channel.DingTalkChanel",
         const.WECOM_BOT: "channel.wecom_bot.wecom_bot_channel.WecomBotChannel",
         const.QQ: "channel.qq.qq_channel.QQChannel",
+        const.WEIXIN: "channel.weixin.weixin_channel.WeixinChannel",
+        "wx": "channel.weixin.weixin_channel.WeixinChannel",
     }
     module_path = cls_map.get(channel_name)
     if not module_path:

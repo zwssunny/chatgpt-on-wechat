@@ -106,14 +106,17 @@
                   "tools/bash",
                   "tools/send",
                   "tools/memory",
-                  "tools/env-config"
+                  "tools/env-config",
+                  "tools/web-fetch",
+                  "tools/scheduler"
                 ]
               },
               {
                 "group": "可选工具",
                 "pages": [
                   "tools/web-search",
-                  "tools/scheduler"
+                  "tools/vision",
+                  "tools/browser"
                 ]
               }
             ]
@@ -125,15 +128,9 @@
                 "group": "技能系统",
                 "pages": [
                   "skills/index",
-                  "skills/skill-creator"
-                ]
-              },
-              {
-                "group": "内置技能",
-                "pages": [
-                  "skills/image-vision",
-                  "skills/linkai-agent",
-                  "skills/web-fetch"
+                  "skills/install",
+                  "skills/create",
+                  "skills/hub"
                 ]
               }
             ]
@@ -144,7 +141,8 @@
               {
                 "group": "记忆系统",
                 "pages": [
-                  "memory"
+                  "memory/index",
+                  "memory/context"
                 ]
               }
             ]
@@ -155,6 +153,7 @@
               {
                 "group": "接入渠道",
                 "pages": [
+                  "channels/weixin",
                   "channels/web",
                   "channels/feishu",
                   "channels/dingtalk",
@@ -167,12 +166,28 @@
             ]
           },
           {
+            "tab": "命令",
+            "groups": [
+              {
+                "group": "命令系统",
+                "pages": [
+                  "cli/index",
+                  "cli/process",
+                  "cli/skill",
+                  "cli/general"
+                ]
+              }
+            ]
+          },
+          {
             "tab": "版本",
             "groups": [
               {
                 "group": "发布记录",
                 "pages": [
                   "releases/overview",
+                  "releases/v2.0.5",
+                  "releases/v2.0.4",
                   "releases/v2.0.3",
                   "releases/v2.0.2",
                   "releases/v2.0.1",
@@ -252,14 +267,17 @@
                   "en/tools/bash",
                   "en/tools/send",
                   "en/tools/memory",
-                  "en/tools/env-config"
+                  "en/tools/env-config",
+                  "en/tools/web-fetch",
+                  "en/tools/scheduler"
                 ]
               },
               {
                 "group": "Optional Tools",
                 "pages": [
                   "en/tools/web-search",
-                  "en/tools/scheduler"
+                  "en/tools/vision",
+                  "en/tools/browser"
                 ]
               }
             ]
@@ -271,15 +289,9 @@
                 "group": "Skills System",
                 "pages": [
                   "en/skills/index",
-                  "en/skills/skill-creator"
-                ]
-              },
-              {
-                "group": "Built-in Skills",
-                "pages": [
-                  "en/skills/image-vision",
-                  "en/skills/linkai-agent",
-                  "en/skills/web-fetch"
+                  "en/skills/install",
+                  "en/skills/skill-creator",
+                  "en/skills/hub"
                 ]
               }
             ]
@@ -290,7 +302,8 @@
               {
                 "group": "Memory System",
                 "pages": [
-                  "en/memory"
+                  "en/memory/index",
+                  "en/memory/context"
                 ]
               }
             ]
@@ -301,6 +314,7 @@
               {
                 "group": "Platforms",
                 "pages": [
+                  "en/channels/weixin",
                   "en/channels/web",
                   "en/channels/feishu",
                   "en/channels/dingtalk",
@@ -313,12 +327,28 @@
             ]
           },
           {
+            "tab": "CLI",
+            "groups": [
+              {
+                "group": "Command System",
+                "pages": [
+                  "en/cli/index",
+                  "en/cli/process",
+                  "en/cli/skill",
+                  "en/cli/chat"
+                ]
+              }
+            ]
+          },
+          {
             "tab": "Releases",
             "groups": [
               {
                 "group": "Release Notes",
                 "pages": [
                   "en/releases/overview",
+                  "en/releases/v2.0.5",
+                  "en/releases/v2.0.4",
                   "en/releases/v2.0.2",
                   "en/releases/v2.0.1",
                   "en/releases/v2.0.0"
@@ -399,14 +429,16 @@
                   "ja/tools/send",
                   "ja/tools/memory",
                   "ja/tools/env-config",
-                  "ja/tools/browser"
+                  "ja/tools/web-fetch",
+                  "ja/tools/scheduler"
                 ]
               },
               {
                 "group": "オプションツール",
                 "pages": [
                   "ja/tools/web-search",
-                  "ja/tools/scheduler"
+                  "ja/tools/vision",
+                  "ja/tools/browser"
                 ]
               }
             ]
@@ -418,15 +450,9 @@
                 "group": "スキルシステム",
                 "pages": [
                   "ja/skills/index",
-                  "ja/skills/skill-creator"
-                ]
-              },
-              {
-                "group": "内蔵スキル",
-                "pages": [
-                  "ja/skills/image-vision",
-                  "ja/skills/linkai-agent",
-                  "ja/skills/web-fetch"
+                  "ja/skills/install",
+                  "ja/skills/create",
+                  "ja/skills/hub"
                 ]
               }
             ]
@@ -437,7 +463,8 @@
               {
                 "group": "メモリシステム",
                 "pages": [
-                  "ja/memory"
+                  "ja/memory/index",
+                  "ja/memory/context"
                 ]
               }
             ]
@@ -448,6 +475,7 @@
               {
                 "group": "プラットフォーム",
                 "pages": [
+                  "ja/channels/weixin",
                   "ja/channels/web",
                   "ja/channels/feishu",
                   "ja/channels/dingtalk",
@@ -460,12 +488,28 @@
             ]
           },
           {
+            "tab": "CLI",
+            "groups": [
+              {
+                "group": "コマンドシステム",
+                "pages": [
+                  "ja/cli/index",
+                  "ja/cli/process",
+                  "ja/cli/skill",
+                  "ja/cli/general"
+                ]
+              }
+            ]
+          },
+          {
             "tab": "リリース",
             "groups": [
               {
                 "group": "リリースノート",
                 "pages": [
                   "ja/releases/overview",
+                  "ja/releases/v2.0.5",
+                  "ja/releases/v2.0.4",
                   "ja/releases/v2.0.3",
                   "ja/releases/v2.0.2",
                   "ja/releases/v2.0.1",

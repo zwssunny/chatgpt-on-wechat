@@ -67,14 +67,14 @@ class AgentLLMModel(LLMModel):
 
     _MODEL_BOT_TYPE_MAP = {
         "wenxin": const.BAIDU, "wenxin-4": const.BAIDU,
-        "xunfei": const.XUNFEI, const.QWEN: const.QWEN,
+        "xunfei": const.XUNFEI, const.QWEN: const.QWEN_DASHSCOPE,
         const.MODELSCOPE: const.MODELSCOPE,
     }
     _MODEL_PREFIX_MAP = [
         ("qwen", const.QWEN_DASHSCOPE), ("qwq", const.QWEN_DASHSCOPE), ("qvq", const.QWEN_DASHSCOPE),
         ("gemini", const.GEMINI), ("glm", const.ZHIPU_AI), ("claude", const.CLAUDEAPI),
         ("moonshot", const.MOONSHOT), ("kimi", const.MOONSHOT),
-        ("doubao", const.DOUBAO),
+        ("doubao", const.DOUBAO), ("deepseek", const.DEEPSEEK),
     ]
 
     def __init__(self, bridge: Bridge, bot_type: str = "chat"):
@@ -115,8 +115,8 @@ class AgentLLMModel(LLMModel):
             return const.QWEN_DASHSCOPE
         if model_name in [const.MOONSHOT, "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"]:
             return const.MOONSHOT
-        if model_name in [const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER]:
-            return const.OPENAI
+        if conf().get("bot_type") == "modelscope":
+            return const.MODELSCOPE
         for prefix, btype in self._MODEL_PREFIX_MAP:
             if model_name.startswith(prefix):
                 return btype
@@ -273,10 +273,13 @@ class AgentBridge:
             tool_manager.load_tools()
             
             tools = []
+            workspace_dir = kwargs.get("workspace_dir")
             for tool_name in tool_manager.tool_classes.keys():
                 try:
                     tool = tool_manager.create_tool(tool_name)
                     if tool:
+                        if workspace_dir and hasattr(tool, 'cwd'):
+                            tool.cwd = workspace_dir
                         tools.append(tool)
                 except Exception as e:
                     logger.warning(f"[AgentBridge] Failed to load tool {tool_name}: {e}")

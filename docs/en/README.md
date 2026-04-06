@@ -7,12 +7,13 @@
   [<a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/README.md">中文</a>] | [English] | [<a href="https://github.com/zhayujie/chatgpt-on-wechat/blob/master/docs/ja/README.md">日本語</a>]
 </p>
 
-**CowAgent** is an AI super assistant powered by LLMs, capable of autonomous task planning, operating computers and external resources, creating and executing Skills, and continuously growing with long-term memory. It supports flexible model switching, handles text, voice, images, and files, and can be integrated into Web, Feishu, DingTalk, WeCom Bot, WeCom App, and WeChat Official Account — running 7×24 hours on your personal computer or server.
+**CowAgent** is an AI super assistant powered by LLMs, capable of autonomous task planning, operating computers and external resources, creating and executing Skills, and continuously growing with long-term memory. It supports flexible model switching, handles text, voice, images, and files, and can be integrated into WeChat, Web, Feishu, DingTalk, WeCom Bot, WeCom App, and WeChat Official Account — running 7×24 hours on your personal computer or server.
 
 <p align="center">
   <a href="https://cowagent.ai/">🌐 Website</a> &nbsp;·&nbsp;
   <a href="https://docs.cowagent.ai/en/intro/index">📖 Docs</a> &nbsp;·&nbsp;
   <a href="https://docs.cowagent.ai/en/guide/quick-start">🚀 Quick Start</a> &nbsp;·&nbsp;
+  <a href="https://skills.cowagent.ai/">🧩 Skill Hub</a> &nbsp;·&nbsp;
   <a href="https://link-ai.tech/cowagent/create">☁️ Try Online</a>
 </p>
 
@@ -20,13 +21,14 @@
 
 > CowAgent is both an out-of-the-box AI super assistant and a highly extensible Agent framework. You can extend it with new model interfaces, channels, built-in tools, and the Skills system to flexibly implement various customization needs.
 
-- ✅ **Autonomous Task Planning**: Understands complex tasks and autonomously plans execution, continuously thinking and invoking tools until goals are achieved. Supports accessing files, terminal, browser, schedulers, and other system resources via tools.
+- ✅ **Autonomous Task Planning**: Understands complex tasks and autonomously plans execution, continuously thinking and invoking tools until goals are achieved.
 - ✅ **Long-term Memory**: Automatically persists conversation memory to local files and databases, including core memory and daily memory, with keyword and vector retrieval support.
-- ✅ **Skills System**: Implements a Skills creation and execution engine with multiple built-in skills, and supports custom Skills development through natural language conversation.
+- ✅ **Skills System**: Implements a Skills creation and execution engine, supports installing skills from [Skill Hub](https://skills.cowagent.ai), GitHub, etc., or creating custom Skills through conversation.
+- ✅ **Tool System**: Built-in tools for file I/O, terminal execution, browser automation, scheduled tasks, messaging, and more — autonomously invoked by the Agent.
+- ✅ **CLI System**: Provides terminal commands and in-chat commands for process management, skill installation, configuration, and more.
 - ✅ **Multimodal Messages**: Supports parsing, processing, generating, and sending text, images, voice, files, and other message types.
 - ✅ **Multiple Model Support**: Supports OpenAI, Claude, Gemini, DeepSeek, MiniMax, GLM, Qwen, Kimi, Doubao, and other mainstream model providers.
-- ✅ **Multi-platform Deployment**: Runs on local computers or servers, integrable into Web, Feishu, DingTalk, WeChat Official Account, and WeCom applications.
-- ✅ **Knowledge Base**: Integrates enterprise knowledge base capabilities via the [LinkAI](https://link-ai.tech) platform.
+- ✅ **Multi-platform Deployment**: Runs on local computers or servers, integrable into WeChat, Web, Feishu, DingTalk, WeChat Official Account, and WeCom applications.
 
 ## Disclaimer
 
@@ -39,6 +41,8 @@
 Try online (no deployment needed): [CowAgent](https://link-ai.tech/cowagent/create)
 
 ## Changelog
+
+> **2026.04.01:** [v2.0.5](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/2.0.5) — Cow CLI, Skill Hub open source, Browser tool, WeCom Bot QR scan, and more.
 
 > **2026.02.27:** [v2.0.2](https://github.com/zhayujie/chatgpt-on-wechat/releases/tag/2.0.2) — Web console overhaul (streaming chat, model/skill/memory/channel/scheduler/log management), multi-channel concurrent running, session persistence, new models including Gemini 3.1 Pro / Claude 4.6 Sonnet / Qwen3.5 Plus.
 
@@ -60,13 +64,19 @@ Full changelog: [Release Notes](https://docs.cowagent.ai/en/releases/overview)
 
 The project provides a one-click script for installation, configuration, startup, and management:
 
+**Linux / macOS:**
 ```bash
 bash <(curl -fsSL https://cdn.link-ai.tech/code/cow/run.sh)
 ```
 
+**Windows (PowerShell):**
+```powershell
+irm https://cdn.link-ai.tech/code/cow/run.ps1 | iex
+```
+
 After running, the Web service starts by default. Access `http://localhost:9899/chat` to chat.
 
-Script usage: [One-click Install](https://docs.cowagent.ai/en/guide/quick-start)
+Script usage: [One-click Install](https://docs.cowagent.ai/en/guide/quick-start). After installation, you can also use `cow start`, `cow stop`, and other [CLI commands](https://docs.cowagent.ai/en/cli/index) to manage the service.
 
 ### Manual Installation
 
@@ -84,7 +94,25 @@ pip3 install -r requirements.txt
 pip3 install -r requirements-optional.txt   # optional but recommended
 ```
 
-**3. Configure**
+**3. Install Cow CLI (recommended)**
+
+```bash
+pip3 install -e .
+```
+
+After installation, use `cow` commands to manage the service (start, stop, update, etc.) and skills. See [Command Docs](https://docs.cowagent.ai/en/cli/index).
+
+**4. Install browser (optional)**
+
+If you need the Agent to operate a browser (visit web pages, fill forms, etc.):
+
+```bash
+cow install-browser
+```
+
+This auto-installs `playwright` and Chromium. See [Browser Tool Docs](https://docs.cowagent.ai/en/tools/browser).
+
+**5. Configure**
 
 ```bash
 cp config-template.json config.json
@@ -92,13 +120,25 @@ cp config-template.json config.json
 
 Fill in your model API key and channel type in `config.json`. See the [configuration docs](https://docs.cowagent.ai/en/guide/manual-install) for details.
 
-**4. Run**
+**6. Run**
 
 ```bash
-python3 app.py
+cow start              # recommended, requires Cow CLI
+python3 app.py         # or run directly
 ```
 
-For server background run:
+For server deployment, use `cow` commands to manage the service:
+
+```bash
+cow start              # start in background
+cow stop               # stop service
+cow restart            # restart service
+cow status             # check running status
+cow logs               # view logs
+cow update             # pull latest code and restart
+```
+
+Or use the traditional way:
 
 ```bash
 nohup python3 app.py & tail -f nohup.out
@@ -125,7 +165,7 @@ Supports mainstream model providers. Recommended models for Agent mode:
 | GLM | `glm-5-turbo` |
 | Kimi | `kimi-k2.5` |
 | Doubao | `doubao-seed-2-0-code-preview-260215` |
-| Qwen | `qwen3.5-plus` |
+| Qwen | `qwen3.6-plus` |
 | Claude | `claude-sonnet-4-6` |
 | Gemini | `gemini-3.1-pro-preview` |
 | OpenAI | `gpt-5.4` |
@@ -163,6 +203,7 @@ Supports multiple platforms. Set `channel_type` in `config.json` to switch:
 
 | Channel | `channel_type` | Docs |
 | --- | --- | --- |
+| WeChat | `weixin` | [WeChat Setup](https://docs.cowagent.ai/en/channels/weixin) |
 | Web (default) | `web` | [Web Channel](https://docs.cowagent.ai/en/channels/web) |
 | Feishu | `feishu` | [Feishu Setup](https://docs.cowagent.ai/en/channels/feishu) |
 | DingTalk | `dingtalk` | [DingTalk Setup](https://docs.cowagent.ai/en/channels/dingtalk) |
@@ -185,6 +226,7 @@ Multiple channels can be enabled simultaneously, separated by commas: `"channel_
 
 ## 🔗 Related Projects
 
+- [Cow Skill Hub](https://github.com/zhayujie/cow-skill-hub): Open skill marketplace for AI Agents — browse, search, install, and publish skills for CowAgent, OpenClaw, Claude Code, and more.
 - [bot-on-anything](https://github.com/zhayujie/bot-on-anything): Lightweight and highly extensible LLM application framework supporting Slack, Telegram, Discord, Gmail, and more.
 - [AgentMesh](https://github.com/MinimalFuture/AgentMesh): Open-source Multi-Agent framework for complex problem solving through agent team collaboration.
 
@@ -194,7 +236,7 @@ FAQs: <https://github.com/zhayujie/chatgpt-on-wechat/wiki/FAQs>
 
 ## 🛠️ Contributing
 
-Welcome to add new channels, referring to the [Feishu channel](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/channel/feishu/feishu_channel.py) as an example. Also welcome to contribute new Skills, referring to the [Skill Creator docs](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/skills/skill-creator/SKILL.md).
+Welcome to add new channels, referring to the [Feishu channel](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/channel/feishu/feishu_channel.py) as an example. Also welcome to contribute new Skills, see the [Skill Creation docs](https://docs.cowagent.ai/en/skills/create), or submit to [Skill Hub](https://skills.cowagent.ai/submit).
 
 ## ✉ Contact
 
