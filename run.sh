@@ -28,6 +28,27 @@ if [ -z "$BASH_VERSION" ]; then
     exit 1
 fi
 
+# Cross-platform timeout: prefer GNU timeout/gtimeout, fallback to a pure-bash implementation
+# that uses background process + sleep to enforce a hard time limit.
+if command -v timeout &> /dev/null; then
+    _timeout() { timeout "$@"; }
+elif command -v gtimeout &> /dev/null; then
+    _timeout() { gtimeout "$@"; }
+else
+    _timeout() {
+        local secs=$1; shift
+        "$@" &
+        local cmd_pid=$!
+        ( sleep "$secs"; kill $cmd_pid 2>/dev/null ) &
+        local watcher_pid=$!
+        wait $cmd_pid 2>/dev/null
+        local exit_code=$?
+        kill $watcher_pid 2>/dev/null
+        wait $watcher_pid 2>/dev/null
+        return $exit_code
+    }
+fi
+
 # Get current script directory
 export BASE_DIR=$(cd "$(dirname "$0")"; pwd)
 
@@ -127,21 +148,21 @@ check_python_version() {
 
 # Clone project
 clone_project() {
-    echo -e "${GREEN}🔍 Cloning ChatGPT-on-WeChat project...${NC}"
+    echo -e "${GREEN}🔍 Cloning CowAgent project...${NC}"
 
-    if [ -d "chatgpt-on-wechat" ]; then
-        echo -e "${YELLOW}⚠️  Directory 'chatgpt-on-wechat' already exists.${NC}"
+    if [ -d "CowAgent" ]; then
+        echo -e "${YELLOW}⚠️  Directory 'CowAgent' already exists.${NC}"
         read -p "Choose action: overwrite(o), backup(b), or quit(q)? [press Enter for default: b]: " choice
         choice=${choice:-b}
         case "$choice" in
             o|O)
-                echo -e "${YELLOW}🗑️  Overwriting 'chatgpt-on-wechat' directory...${NC}"
-                rm -rf chatgpt-on-wechat
+                echo -e "${YELLOW}🗑️  Overwriting 'CowAgent' directory...${NC}"
+                rm -rf CowAgent
                 ;;
             b|B)
-                backup_dir="chatgpt-on-wechat_backup_$(date +%s)"
+                backup_dir="CowAgent_backup_$(date +%s)"
                 echo -e "${YELLOW}🔀 Backing up to '$backup_dir'...${NC}"
-                mv chatgpt-on-wechat "$backup_dir"
+                mv CowAgent "$backup_dir"
                 ;;
             q|Q)
                 echo -e "${RED}❌ Installation cancelled.${NC}"
@@ -158,31 +179,52 @@ clone_project() {
 
     if ! command -v git &> /dev/null; then
         echo -e "${YELLOW}⚠️  Git not available. Trying wget/curl...${NC}"
-        local zip_url="https://gitee.com/zhayujie/chatgpt-on-wechat/repository/archive/master.zip"
+        local zip_url="https://gitee.com/zhayujie/CowAgent/repository/archive/master.zip"
         if command -v wget &> /dev/null; then
-            wget "$zip_url" -O chatgpt-on-wechat.zip
+            wget "$zip_url" -O CowAgent.zip
         elif command -v curl &> /dev/null; then
-            curl -L "$zip_url" -o chatgpt-on-wechat.zip
+            curl -L "$zip_url" -o CowAgent.zip
         else
             echo -e "${RED}❌ Cannot download project. Please install Git, wget, or curl.${NC}"
             exit 1
         fi
-        unzip chatgpt-on-wechat.zip
-        mv chatgpt-on-wechat-master chatgpt-on-wechat
-        rm chatgpt-on-wechat.zip
+        unzip CowAgent.zip
+        mv CowAgent-master CowAgent
+        rm CowAgent.zip
     else
-        GIT_HTTP_CONNECT_TIMEOUT=10 GIT_HTTP_LOW_SPEED_LIMIT=1024 GIT_HTTP_LOW_SPEED_TIME=15 \
-        git clone --depth 10 --progress https://github.com/zhayujie/chatgpt-on-wechat.git || {
-            echo -e "${YELLOW}⚠️  GitHub is slow, switching to Gitee mirror...${NC}"
-            git clone --depth 10 --progress https://gitee.com/zhayujie/chatgpt-on-wechat.git
-        }
-        if [[ $? -ne 0 ]]; then
+        local clone_ok=false
+        # Detect and temporarily disable invalid git proxy settings
+        local _git_proxy_unset=false
+        local _http_proxy=$(git config --global http.proxy 2>/dev/null)
+        local _https_proxy=$(git config --global https.proxy 2>/dev/null)
+        if [ -n "$_http_proxy" ] && ! curl -s --connect-timeout 3 --max-time 5 --proxy "$_http_proxy" https://github.com > /dev/null 2>&1; then
+            echo -e "${YELLOW}⚠️  Invalid git proxy detected: $_http_proxy, temporarily disabling...${NC}"
+            git config --global --unset http.proxy
+            [ -n "$_https_proxy" ] && git config --global --unset https.proxy
+            _git_proxy_unset=true
+        fi
+        # Test GitHub connectivity before attempting clone
+        if curl -sI --connect-timeout 5 --max-time 10 https://github.com > /dev/null 2>&1; then
+            echo -e "${YELLOW}🌐 GitHub is reachable, cloning from GitHub...${NC}"
+            _timeout 60 git clone --depth 10 --progress https://github.com/zhayujie/CowAgent.git && clone_ok=true
+        fi
+        if [ "$clone_ok" = false ]; then
+            echo -e "${YELLOW}⚠️  GitHub clone failed or timed out, switching to Gitee mirror...${NC}"
+            _timeout 30 git clone --depth 10 --progress https://gitee.com/zhayujie/CowAgent.git && clone_ok=true
+        fi
+        if [ "$clone_ok" = false ]; then
             echo -e "${RED}❌ Project clone failed. Please check network connection.${NC}"
+            if git config --global http.proxy &> /dev/null || git config --global https.proxy &> /dev/null || [ -n "$http_proxy" ] || [ -n "$https_proxy" ] || [ -n "$HTTP_PROXY" ] || [ -n "$HTTPS_PROXY" ]; then
+                echo -e "${YELLOW}💡 Detected proxy settings. If proxy is misconfigured, try removing it with:${NC}"
+                echo -e "${YELLOW}   git config --global --unset http.proxy${NC}"
+                echo -e "${YELLOW}   git config --global --unset https.proxy${NC}"
+                echo -e "${YELLOW}   unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY${NC}"
+            fi
             exit 1
         fi
     fi
 
-    cd chatgpt-on-wechat || { echo -e "${RED}❌ Failed to enter project directory.${NC}"; exit 1; }
+    cd CowAgent || { echo -e "${RED}❌ Failed to enter project directory.${NC}"; exit 1; }
     export BASE_DIR=$(pwd)
     echo -e "${GREEN}✅ Project cloned successfully: $BASE_DIR${NC}"
     
@@ -267,26 +309,27 @@ select_model() {
     echo -e "${CYAN}${BOLD}=========================================${NC}"
     echo -e "${CYAN}${BOLD}   Select AI Model${NC}"
     echo -e "${CYAN}${BOLD}=========================================${NC}"
-    echo -e "${YELLOW}1) MiniMax (MiniMax-M2.7, MiniMax-M2.5, etc.)${NC}"
-    echo -e "${YELLOW}2) Zhipu AI (glm-5-turbo, glm-5, etc.)${NC}"
-    echo -e "${YELLOW}3) Kimi (kimi-k2.5, kimi-k2, etc.)${NC}"
-    echo -e "${YELLOW}4) Doubao (doubao-seed-2-0-code-preview-260215, etc.)${NC}"
-    echo -e "${YELLOW}5) Qwen (qwen3.6-plus, qwen3.5-plus, qwen3-max, qwq-plus, etc.)${NC}"
-    echo -e "${YELLOW}6) Claude (claude-sonnet-4-6, claude-opus-4-6, etc.)${NC}"
-    echo -e "${YELLOW}7) Gemini (gemini-3.1-flash-lite-preview, gemini-3.1-pro-preview, etc.)${NC}"
-    echo -e "${YELLOW}8) OpenAI GPT (gpt-5.4, gpt-5.2, gpt-4.1, etc.)${NC}"
-    echo -e "${YELLOW}9) LinkAI (access multiple models via one API)${NC}"
+    echo -e "${YELLOW}1) DeepSeek (deepseek-v4-flash, deepseek-v4-pro, etc.)${NC}"
+    echo -e "${YELLOW}2) MiniMax (MiniMax-M2.7, MiniMax-M2.5, etc.)${NC}"
+    echo -e "${YELLOW}3) Claude (claude-sonnet-4-6, claude-opus-4-7, claude-opus-4-6, etc.)${NC}"
+    echo -e "${YELLOW}4) Gemini (gemini-3.1-flash-lite-preview, gemini-3.1-pro-preview, etc.)${NC}"
+    echo -e "${YELLOW}5) OpenAI GPT (gpt-5.4, gpt-5.2, gpt-4.1, etc.)${NC}"
+    echo -e "${YELLOW}6) Zhipu AI (glm-5.1, glm-5-turbo, glm-5, etc.)${NC}"
+    echo -e "${YELLOW}7) Qwen (qwen3.6-plus, qwen3.5-plus, qwen3-max, qwq-plus, etc.)${NC}"
+    echo -e "${YELLOW}8) Doubao (doubao-seed-2-0-code-preview-260215, etc.)${NC}"
+    echo -e "${YELLOW}9) Kimi (kimi-k2.6, kimi-k2.5, kimi-k2, etc.)${NC}"
+    echo -e "${YELLOW}10) LinkAI (access multiple models via one API)${NC}"
     echo ""
     
     while true; do
-        read -p "Enter your choice [press Enter for default: 1 - MiniMax]: " model_choice
+        read -p "Enter your choice [press Enter for default: 1 - DeepSeek]: " model_choice
         model_choice=${model_choice:-1}
         case "$model_choice" in
-            1|2|3|4|5|6|7|8|9)
+            1|2|3|4|5|6|7|8|9|10)
                 break
                 ;;
             *)
-                echo -e "${RED}Invalid choice. Please enter 1-9.${NC}"
+                echo -e "${RED}Invalid choice. Please enter 1-10.${NC}"
                 ;;
         esac
     done
@@ -314,25 +357,26 @@ read_api_base() {
 # Configure model
 configure_model() {
     case "$model_choice" in
-        1) read_model_config "MiniMax" "MiniMax-M2.7" "MINIMAX_KEY" ;;
-        2) read_model_config "Zhipu AI" "glm-5-turbo" "ZHIPU_KEY" ;;
-        3) read_model_config "Kimi (Moonshot)" "kimi-k2.5" "MOONSHOT_KEY" ;;
-        4) read_model_config "Doubao (Volcengine Ark)" "doubao-seed-2-0-code-preview-260215" "ARK_KEY" ;;
-        5) read_model_config "Qwen (DashScope)" "qwen3.6-plus" "DASHSCOPE_KEY" ;;
-        6)
+        1) read_model_config "DeepSeek" "deepseek-v4-flash" "DEEPSEEK_KEY" ;;
+        2) read_model_config "MiniMax" "MiniMax-M2.7" "MINIMAX_KEY" ;;
+        3)
             read_model_config "Claude" "claude-sonnet-4-6" "CLAUDE_KEY"
             read_api_base "CLAUDE_BASE" "https://api.anthropic.com/v1"
             ;;
-        7)
+        4)
             read_model_config "Gemini" "gemini-3.1-pro-preview" "GEMINI_KEY"
             read_api_base "GEMINI_BASE" "https://generativelanguage.googleapis.com"
             ;;
-        8)
+        5)
             read_model_config "OpenAI GPT" "gpt-5.4" "OPENAI_KEY"
             read_api_base "OPENAI_BASE" "https://api.openai.com/v1"
             ;;
-        9)
-            read_model_config "LinkAI" "MiniMax-M2.7" "LINKAI_KEY"
+        6) read_model_config "Zhipu AI" "glm-5.1" "ZHIPU_KEY" ;;
+        7) read_model_config "Qwen (DashScope)" "qwen3.6-plus" "DASHSCOPE_KEY" ;;
+        8) read_model_config "Doubao (Volcengine Ark)" "doubao-seed-2-0-code-preview-260215" "ARK_KEY" ;;
+        9) read_model_config "Kimi (Moonshot)" "kimi-k2.6" "MOONSHOT_KEY" ;;
+        10)
+            read_model_config "LinkAI" "deepseek-v4-flash" "LINKAI_KEY"
             USE_LINKAI="true"
             ;;
     esac
@@ -469,6 +513,8 @@ create_config_file() {
     ARK_KEY="${ARK_KEY:-}" \
     DASHSCOPE_KEY="${DASHSCOPE_KEY:-}" \
     MINIMAX_KEY="${MINIMAX_KEY:-}" \
+    DEEPSEEK_KEY="${DEEPSEEK_KEY:-}" \
+    DEEPSEEK_BASE="${DEEPSEEK_BASE:-https://api.deepseek.com/v1}" \
     USE_LINKAI="${USE_LINKAI:-false}" \
     LINKAI_KEY="${LINKAI_KEY:-}" \
     FEISHU_APP_ID="${FEISHU_APP_ID:-}" \
@@ -503,6 +549,8 @@ base = {
     'ark_api_key': e('ARK_KEY', ''),
     'dashscope_api_key': e('DASHSCOPE_KEY', ''),
     'minimax_api_key': e('MINIMAX_KEY', ''),
+    'deepseek_api_key': e('DEEPSEEK_KEY', ''),
+    'deepseek_api_base': e('DEEPSEEK_BASE'),
     'voice_to_text': 'openai',
     'text_to_voice': 'openai',
     'voice_reply_voice': False,
@@ -802,7 +850,7 @@ cmd_update() {
             pull_ok=true
         else
             echo -e "${YELLOW}⚠️  git pull failed, trying Gitee mirror...${NC}"
-            git remote set-url origin https://gitee.com/zhayujie/chatgpt-on-wechat.git
+            git remote set-url origin https://gitee.com/zhayujie/CowAgent.git
             if git pull; then
                 pull_ok=true
             else

@@ -490,7 +490,7 @@ class AgentInitializer:
         
         env_file = expand_path("~/.cow/.env")
         
-        # Read existing env vars
+        # Read existing env vars (key -> value)
         existing_env_vars = {}
         if os.path.exists(env_file):
             try:
@@ -498,38 +498,46 @@ class AgentInitializer:
                     for line in f:
                         line = line.strip()
                         if line and not line.startswith('#') and '=' in line:
-                            key, _ = line.split('=', 1)
-                            existing_env_vars[key.strip()] = True
+                            key, val = line.split('=', 1)
+                            existing_env_vars[key.strip()] = val.strip()
             except Exception as e:
                 logger.warning(f"[AgentInitializer] Failed to read .env file: {e}")
         
-        # Check which keys need migration
-        keys_to_migrate = {}
+        # Sync config.json values into .env (add/update/remove)
+        updated = False
         for config_key, env_key in key_mapping.items():
-            if env_key in existing_env_vars:
-                continue
-            value = conf().get(config_key, "")
-            if value and value.strip():
-                keys_to_migrate[env_key] = value.strip()
-        
-        # Write new keys
-        if keys_to_migrate:
+            raw = conf().get(config_key, "")
+            value = raw.strip() if raw else ""
+            old_value = existing_env_vars.get(env_key)
+
+            if value:
+                if old_value == value:
+                    continue
+                existing_env_vars[env_key] = value
+                os.environ[env_key] = value
+                updated = True
+            else:
+                if old_value is None:
+                    continue
+                existing_env_vars.pop(env_key, None)
+                os.environ.pop(env_key, None)
+                updated = True
+
+        if updated:
             try:
                 env_dir = os.path.dirname(env_file)
-                if not os.path.exists(env_dir):
-                    os.makedirs(env_dir, exist_ok=True)
-                if not os.path.exists(env_file):
-                    open(env_file, 'a').close()
-                
-                with open(env_file, 'a', encoding='utf-8') as f:
-                    f.write('\n# Auto-migrated from config.json\n')
-                    for key, value in keys_to_migrate.items():
+                os.makedirs(env_dir, exist_ok=True)
+
+                # Rewrite the entire .env file to ensure consistency
+                with open(env_file, 'w', encoding='utf-8') as f:
+                    f.write('# Environment variables for agent\n')
+                    f.write('# Auto-managed - synced from config.json on startup\n\n')
+                    for key, value in sorted(existing_env_vars.items()):
                         f.write(f'{key}={value}\n')
-                        os.environ[key] = value
-                
-                logger.info(f"[AgentInitializer] Migrated {len(keys_to_migrate)} API keys to .env: {list(keys_to_migrate.keys())}")
+
+                logger.info(f"[AgentInitializer] Synced API keys from config.json to .env")
             except Exception as e:
-                logger.warning(f"[AgentInitializer] Failed to migrate API keys: {e}")
+                logger.warning(f"[AgentInitializer] Failed to sync API keys: {e}")
 
     def _start_daily_flush_timer(self):
         """Start a background thread that flushes all agents' memory daily at 23:55."""
@@ -540,17 +548,23 @@ class AgentInitializer:
         import threading
 
         def _daily_flush_loop():
+            import random
+            last_run_date = None  # Track last successful run date to prevent same-day re-trigger
             while True:
                 try:
                     now = datetime.datetime.now()
-                    target = now.replace(hour=23, minute=55, second=0, microsecond=0)
-                    if target <= now:
+                    jitter_min = random.randint(50, 55)
+                    jitter_sec = random.randint(0, 59)
+                    target = now.replace(hour=23, minute=jitter_min, second=jitter_sec, microsecond=0)
+                    # Always schedule for tomorrow if we already ran today, or if target time has passed
+                    if target <= now or (last_run_date == now.date()):
                         target += datetime.timedelta(days=1)
                     wait_seconds = (target - now).total_seconds()
-                    logger.info(f"[DailyFlush] Next flush at {target.strftime('%Y-%m-%d %H:%M')} (in {wait_seconds/3600:.1f}h)")
+                    logger.info(f"[DailyFlush] Next flush at {target.strftime('%Y-%m-%d %H:%M:%S')} (in {wait_seconds/3600:.1f}h)")
                     time.sleep(wait_seconds)
 
                     self._flush_all_agents()
+                    last_run_date = datetime.datetime.now().date()
                 except Exception as e:
                     logger.warning(f"[DailyFlush] Error in daily flush loop: {e}")
                     time.sleep(3600)
@@ -559,7 +573,7 @@ class AgentInitializer:
         t.start()
 
     def _flush_all_agents(self):
-        """Flush memory for all active agent sessions."""
+        """Flush memory for all active agent sessions, then run Deep Dream."""
         agents = []
         if self.agent_bridge.default_agent:
             agents.append(("default", self.agent_bridge.default_agent))
@@ -569,7 +583,10 @@ class AgentInitializer:
         if not agents:
             return
 
+        # Phase 1: flush daily summaries
         flushed = 0
+        flush_threads = []
+        dream_candidate = None
         for label, agent in agents:
             try:
                 if not agent.memory_manager:
@@ -581,8 +598,26 @@ class AgentInitializer:
                 result = agent.memory_manager.flush_manager.create_daily_summary(messages)
                 if result:
                     flushed += 1
+                    t = agent.memory_manager.flush_manager._last_flush_thread
+                    if t:
+                        flush_threads.append(t)
+                if dream_candidate is None:
+                    dream_candidate = agent.memory_manager.flush_manager
             except Exception as e:
                 logger.warning(f"[DailyFlush] Failed for session {label}: {e}")
 
         if flushed:
             logger.info(f"[DailyFlush] Flushed {flushed}/{len(agents)} agent session(s)")
+
+        # Wait for all flush threads to finish before dreaming
+        for t in flush_threads:
+            t.join(timeout=60)
+
+        # Phase 2: Deep Dream — distill daily memories → MEMORY.md + dream diary
+        if dream_candidate:
+            try:
+                result = dream_candidate.deep_dream()
+                if result:
+                    logger.info("[DeepDream] Memory distillation completed successfully")
+            except Exception as e:
+                logger.warning(f"[DeepDream] Failed: {e}")

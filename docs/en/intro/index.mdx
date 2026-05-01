@@ -9,8 +9,8 @@ description: CowAgent - AI Super Assistant powered by LLMs
 
 CowAgent can proactively think and plan tasks, operate computers and external resources, create and execute Skills, and continuously grow with long-term memory. It supports flexible switching between multiple models, handles text, voice, images, files and other multimodal messages, and can be integrated into WeChat, web, Feishu, DingTalk, WeCom, and WeChat Official Account. It runs 7x24 hours on your personal computer or server.
 
-<Card title="GitHub" icon="github" href="https://github.com/zhayujie/chatgpt-on-wechat">
-  github.com/zhayujie/chatgpt-on-wechat
+<Card title="GitHub" icon="github" href="https://github.com/zhayujie/CowAgent">
+  github.com/zhayujie/CowAgent
 </Card>
 
 ## Core Capabilities
@@ -20,7 +20,10 @@ CowAgent can proactively think and plan tasks, operate computers and external re
     Understands complex tasks and autonomously plans execution, continuously thinking and invoking tools until goals are achieved. Supports accessing file systems, terminals, browsers, schedulers, and other system resources through tools.
   </Card>
   <Card title="Long-term Memory" icon="database" href="/en/memory">
-    Automatically persists conversation memory to local files and databases, including core memory and daily memory, with keyword and vector retrieval support.
+    Three-tier memory flow (context → daily memory → global memory) with daily Deep Dream distillation, keyword and vector retrieval support.
+  </Card>
+  <Card title="Knowledge Base" icon="book" href="/en/knowledge">
+    Automatically organizes structured knowledge with knowledge graph visualization, building a continuously growing knowledge network through cross-references.
   </Card>
   <Card title="Skills System" icon="puzzle-piece" href="/en/skills/index">
     Implements a Skills creation and execution engine with built-in skills, and supports custom Skills development through natural language conversation.
@@ -72,7 +75,7 @@ By default, the Web service starts after running. Access `http://localhost:9899/
 
 ## Disclaimer
 
-1. This project follows the [MIT License](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/LICENSE) and is intended for technical research and learning. Users must comply with local laws, regulations, policies, and corporate bylaws. Any illegal or rights-infringing use is prohibited.
+1. This project follows the [MIT License](https://github.com/zhayujie/CowAgent/blob/master/LICENSE) and is intended for technical research and learning. Users must comply with local laws, regulations, policies, and corporate bylaws. Any illegal or rights-infringing use is prohibited.
 2. Agent mode consumes more tokens than normal chat mode. Choose models based on effectiveness and cost. Agent has access to the host operating system — deploy with caution.
 3. CowAgent focuses on open-source development and does not participate in, authorize, or issue any cryptocurrency.
 

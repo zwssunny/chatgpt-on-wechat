@@ -8,9 +8,11 @@ This includes: OpenAI, LinkAI, Azure OpenAI, and many third-party providers.
 """
 
 import json
-import openai
+import requests
+from typing import Optional
 from common.log import logger
 from agent.protocol.message_utils import drop_orphaned_tool_results_openai
+from models.openai.openai_http_client import OpenAIHTTPClient, OpenAIHTTPError
 
 
 class OpenAICompatibleBot:
@@ -133,49 +135,87 @@ class OpenAICompatibleBot:
                     "status_code": 500
                 }
     
+    def _get_http_client(self) -> OpenAIHTTPClient:
+        """Build an HTTP client honoring the global proxy config.
+
+        Subclasses can override this for custom auth headers (e.g. Azure's
+        ``api-key`` header) by returning a pre-configured client.
+        """
+        from config import conf
+        proxy = conf().get("proxy") or None
+        return OpenAIHTTPClient(proxy=proxy)
+
     def _handle_sync_response(self, request_params, api_key, api_base):
-        """Handle synchronous OpenAI API response"""
+        """Handle synchronous chat-completion via HTTP."""
+        params = dict(request_params)
+        params.pop("stream", None)
+        # Translate legacy SDK timeout kwarg to our HTTP client kwarg.
+        timeout = params.pop("request_timeout", None) or params.pop("timeout", None)
         try:
-            # Build kwargs with explicit API configuration
-            kwargs = dict(request_params)
-            if api_key:
-                kwargs["api_key"] = api_key
-            if api_base:
-                kwargs["api_base"] = api_base
-            
-            response = openai.ChatCompletion.create(**kwargs)
-            return response
-            
+            client = self._get_http_client()
+            return client.chat_completions(
+                api_key=api_key,
+                api_base=api_base,
+                timeout=timeout,
+                stream=False,
+                **params,
+            )
+        except OpenAIHTTPError as e:
+            logger.error(
+                f"[{self.__class__.__name__}] sync response error: "
+                f"HTTP {e.status_code}: {e.message}"
+            )
+            return {
+                "error": True,
+                "message": e.message,
+                "status_code": e.status_code or 500,
+            }
         except Exception as e:
             logger.error(f"[{self.__class__.__name__}] sync response error: {e}")
             return {
                 "error": True,
                 "message": str(e),
-                "status_code": 500
+                "status_code": 500,
             }
-    
+
     def _handle_stream_response(self, request_params, api_key, api_base):
-        """Handle streaming OpenAI API response"""
+        """Handle streaming chat-completion via HTTP (SSE).
+
+        Yields dict chunks in OpenAI's standard streaming shape:
+          {"choices": [{"delta": {...}, "finish_reason": ...}], ...}
+        On error, yields a single ``{"error": ..., "status_code": ...}`` chunk
+        — the same contract :mod:`agent.protocol.agent_stream` already handles.
+        """
+        params = dict(request_params)
+        params.pop("stream", None)
+        timeout = params.pop("request_timeout", None) or params.pop("timeout", None)
         try:
-            # Build kwargs with explicit API configuration
-            kwargs = dict(request_params)
-            if api_key:
-                kwargs["api_key"] = api_key
-            if api_base:
-                kwargs["api_base"] = api_base
-            
-            stream = openai.ChatCompletion.create(**kwargs)
-            
-            # Stream chunks to caller
+            client = self._get_http_client()
+            stream = client.chat_completions(
+                api_key=api_key,
+                api_base=api_base,
+                timeout=timeout,
+                stream=True,
+                **params,
+            )
             for chunk in stream:
                 yield chunk
-                
+        except OpenAIHTTPError as e:
+            logger.error(
+                f"[{self.__class__.__name__}] stream response error: "
+                f"HTTP {e.status_code}: {e.message}"
+            )
+            yield {
+                "error": True,
+                "message": e.message,
+                "status_code": e.status_code or 500,
+            }
         except Exception as e:
             logger.error(f"[{self.__class__.__name__}] stream response error: {e}")
             yield {
                 "error": True,
                 "message": str(e),
-                "status_code": 500
+                "status_code": 500,
             }
     
     def _convert_tools_to_openai_format(self, tools):
@@ -306,3 +346,51 @@ class OpenAICompatibleBot:
                 openai_messages.append(msg)
 
         return drop_orphaned_tool_results_openai(openai_messages)
+
+    def call_vision(self, image_url: str, question: str,
+                    model: Optional[str] = None,
+                    max_tokens: int = 1000) -> dict:
+        """Analyze an image using the OpenAI-compatible /chat/completions endpoint."""
+        try:
+            api_config = self.get_api_config()
+            vision_model = model or api_config.get("model", "gpt-4o")
+            api_key = api_config.get("api_key", "")
+            api_base = (api_config.get("api_base") or "https://api.openai.com/v1").rstrip("/")
+
+            payload = {
+                "model": vision_model,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": question},
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                    ],
+                }],
+            }
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            resp = requests.post(
+                f"{api_base}/chat/completions",
+                headers=headers, json=payload, timeout=60,
+            )
+            if resp.status_code != 200:
+                body = resp.text[:500]
+                logger.error(f"[{self.__class__.__name__}] call_vision HTTP {resp.status_code}: {body}")
+                return {"error": True, "message": f"HTTP {resp.status_code}: {body}"}
+            data = resp.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            usage = data.get("usage", {})
+            return {
+                "model": vision_model,
+                "content": content,
+                "usage": {
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                },
+            }
+        except Exception as e:
+            logger.error(f"[{self.__class__.__name__}] call_vision error: {e}")
+            return {"error": True, "message": str(e)}

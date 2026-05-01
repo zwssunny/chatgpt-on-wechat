@@ -17,10 +17,12 @@ available_setting = {
     "open_ai_api_base": "https://api.openai.com/v1",
     "claude_api_base": "https://api.anthropic.com/v1",  # claude api base
     "gemini_api_base": "https://generativelanguage.googleapis.com",  # gemini api base
+    "custom_api_key": "",  # custom OpenAI-compatible provider api key (used when bot_type is "custom")
+    "custom_api_base": "",  # custom OpenAI-compatible provider api base (used when bot_type is "custom")
     "proxy": "",  # openai使用的代理
     # chatgpt模型， 当use_azure_chatgpt为true时，其名称为Azure上model deployment名称
     "model": "gpt-3.5-turbo",  # 可选择: gpt-4o, pt-4o-mini, gpt-4-turbo, claude-3-sonnet, wenxin, moonshot, qwen-turbo, xunfei, glm-4, minimax, gemini等模型，全部可选模型详见common/const.py文件
-    "bot_type": "",  # 可选配置，使用兼容openai格式的三方服务时候，需填"openai"（历史值"chatGPT"仍兼容）。bot具体名称详见common/const.py文件，如不填根据model名称判断
+    "bot_type": "",  # 可选配置，使用兼容openai格式的三方服务时候，需填"openai"或"custom"（custom模式下切换模型不会自动切换bot_type）。bot具体名称详见common/const.py文件，如不填根据model名称判断
     "use_azure_chatgpt": False,  # 是否使用azure的chatgpt
     "azure_deployment_id": "",  # azure 模型部署名称
     "azure_api_version": "",  # azure api版本
@@ -180,25 +182,36 @@ available_setting = {
     # 豆包(火山方舟) 平台配置
     "ark_api_key": "",
     "ark_base_url": "https://ark.cn-beijing.volces.com/api/v3",
-    #魔搭社区 平台配置
+    # 魔搭社区 平台配置
     "modelscope_api_key": "",
     "modelscope_base_url": "https://api-inference.modelscope.cn/v1/chat/completions",
     # LinkAI平台配置
     "use_linkai": False,
     "linkai_api_key": "",
     "linkai_app_code": "",
-    "linkai_api_base": "https://api.link-ai.tech",  # linkAI服务地址
+    "linkai_api_base": "https://api.link-ai.tech",
     "cloud_host": "client.link-ai.tech",
+    "cloud_port": None,
     "cloud_deployment_id": "",
     "minimax_api_key": "",
     "Minimax_group_id": "",
     "Minimax_base_url": "",
+    "deepseek_api_key": "",
+    "deepseek_api_base": "https://api.deepseek.com/v1",
     "web_port": 9899,
+    "web_password": "",  # Web console password; empty means no authentication required
+    "web_session_expire_days": 30,  # Auth session expiry in days
     "agent": True,  # 是否开启Agent模式
     "agent_workspace": "~/cow",  # agent工作空间路径，用于存储skills、memory等
     "agent_max_context_tokens": 50000,  # Agent模式下最大上下文tokens
-    "agent_max_context_turns": 30,  # Agent模式下最大上下文记忆轮次
-    "agent_max_steps": 15,  # Agent模式下单次运行最大决策步数
+    "agent_max_context_turns": 20,  # Agent模式下最大上下文记忆轮次
+    "agent_max_steps": 20,  # Agent模式下单次运行最大决策步数
+    "enable_thinking": False,  # Enable deep-thinking mode for thinking-capable models
+    "knowledge": True,  # 是否开启知识库功能
+    # Per-skill runtime config. Nested keys are flattened to env vars at startup
+    # using the rule: skill[<name>][<key>] -> SKILL_<NAME>_<KEY>
+    # (e.g. skill["image-generation"].model -> SKILL_IMAGE_GENERATION_MODEL).
+    "skill": {},
 }
 
 
@@ -371,12 +384,16 @@ def load_config():
         "gemini_api_base": "GEMINI_API_BASE",
         "minimax_api_key": "MINIMAX_API_KEY",
         "minimax_api_base": "MINIMAX_API_BASE",
+        "deepseek_api_key": "DEEPSEEK_API_KEY",
+        "deepseek_api_base": "DEEPSEEK_API_BASE",
         "zhipu_ai_api_key": "ZHIPU_AI_API_KEY",
         "zhipu_ai_api_base": "ZHIPU_AI_API_BASE",
         "moonshot_api_key": "MOONSHOT_API_KEY",
         "moonshot_api_base": "MOONSHOT_API_BASE",
         "ark_api_key": "ARK_API_KEY",
         "ark_api_base": "ARK_API_BASE",
+        "dashscope_api_key": "DASHSCOPE_API_KEY",
+        "dashscope_api_base": "DASHSCOPE_API_BASE",
         # Channel credentials (used by skills that check env vars)
         "feishu_app_id": "FEISHU_APP_ID",
         "feishu_app_secret": "FEISHU_APP_SECRET",
@@ -397,10 +414,43 @@ def load_config():
             if val:
                 os.environ[env_key] = str(val)
                 injected += 1
+
+    injected += _sync_skill_config_to_env(config.get("skill", {}))
+
     if injected:
         logger.info("[INIT] Synced {} config values to environment variables".format(injected))
 
     config.load_user_datas()
+
+
+def _sync_skill_config_to_env(skill_section) -> int:
+    """Flatten skill-namespaced config into environment variables.
+
+    Mapping rule: ``config["skill"][<name>][<key>]`` -> ``SKILL_<NAME>_<KEY>``
+    (e.g. ``skill["image-generation"].model`` -> ``SKILL_IMAGE_GENERATION_MODEL``).
+
+    This lets subprocess-based skill scripts read their own settings without
+    importing project code. Existing env vars are NOT overwritten so the
+    real environment always wins.
+
+    Returns the number of variables actually injected.
+    """
+    if not isinstance(skill_section, dict):
+        return 0
+    injected = 0
+    for skill_name, skill_conf in skill_section.items():
+        if not isinstance(skill_conf, dict):
+            continue
+        name_part = str(skill_name).replace("-", "_").upper()
+        for key, val in skill_conf.items():
+            if val is None or val == "":
+                continue
+            env_key = "SKILL_{}_{}".format(name_part, str(key).upper())
+            if env_key in os.environ:
+                continue
+            os.environ[env_key] = str(val)
+            injected += 1
+    return injected
 
 
 def get_root():

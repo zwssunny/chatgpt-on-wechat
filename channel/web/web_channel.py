@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import time
 import json
 import logging
@@ -23,6 +25,62 @@ from config import conf
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".avi", ".mov", ".mkv"}
 
+def _is_password_enabled():
+    return bool(conf().get("web_password", ""))
+
+
+def _session_expire_seconds():
+    return int(conf().get("web_session_expire_days", 30)) * 86400
+
+
+def _create_auth_token():
+    """Create a stateless signed token: ``<timestamp_hex>.<hmac_hex>``."""
+    ts = format(int(time.time()), "x")
+    sig = hmac.new(
+        conf().get("web_password", "").encode(),
+        ts.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{ts}.{sig}"
+
+
+def _verify_auth_token(token):
+    """Verify a signed token is valid and not expired.
+
+    The token is derived from the password, so it survives server restarts
+    and automatically invalidates when the password changes.
+    """
+    if not token or "." not in token:
+        return False
+    ts_hex, sig = token.split(".", 1)
+    try:
+        ts = int(ts_hex, 16)
+    except ValueError:
+        return False
+    if time.time() - ts > _session_expire_seconds():
+        return False
+    expected = hmac.new(
+        conf().get("web_password", "").encode(),
+        ts_hex.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(sig, expected)
+
+
+def _check_auth():
+    """Return True if request is authenticated or password not enabled."""
+    if not _is_password_enabled():
+        return True
+    return _verify_auth_token(web.cookies().get("cow_auth_token", ""))
+
+
+def _require_auth():
+    """Raise 401 if not authenticated. Call at the top of protected handlers."""
+    if not _check_auth():
+        raise web.HTTPError("401 Unauthorized",
+                            {"Content-Type": "application/json; charset=utf-8"},
+                            json.dumps({"status": "error", "message": "Unauthorized"}))
+
 
 def _get_upload_dir() -> str:
     from common.utils import expand_path
@@ -30,6 +88,12 @@ def _get_upload_dir() -> str:
     tmp_dir = os.path.join(ws_root, "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
     return tmp_dir
+
+
+def _generate_session_title(user_message: str, assistant_reply: str = "") -> str:
+    """Delegate to the shared SessionService implementation."""
+    from agent.chat.session_service import generate_session_title
+    return generate_session_title(user_message, assistant_reply)
 
 
 class WebMessage(ChatMessage):
@@ -144,9 +208,24 @@ class WebChannel(ChatChannel):
 
             # Fallback: polling mode
             if session_id in self.session_queues:
+                content = reply.content if reply.content is not None else ""
+                # Skip file:// IMAGE_URL/FILE replies originating from an SSE-enabled
+                # request: they were already pushed via the `file_to_send` event during
+                # agent execution. By the time the chat_channel sends the IMAGE_URL reply,
+                # the SSE stream has typically closed (after the text "done") and the
+                # request_id is gone from sse_queues, so we'd otherwise duplicate the file
+                # as a polling bubble. Scheduler/push tasks have no on_event and must
+                # still go through polling normally.
+                if (
+                    reply.type in (ReplyType.IMAGE_URL, ReplyType.FILE)
+                    and content.startswith("file://")
+                    and context.get("on_event") is not None
+                ):
+                    logger.debug(f"Polling skipped duplicate file reply for session {session_id}")
+                    return
                 response_data = {
                     "type": str(reply.type),
-                    "content": reply.content,
+                    "content": content,
                     "timestamp": time.time(),
                     "request_id": request_id
                 }
@@ -161,6 +240,17 @@ class WebChannel(ChatChannel):
     def _make_sse_callback(self, request_id: str):
         """Build an on_event callback that pushes agent stream events into the SSE queue."""
 
+        # Cap reasoning bytes pushed to the frontend per request to avoid
+        # browser stalls / crashes on very long chains-of-thought. Anything
+        # beyond the cap is dropped from the stream (DB still persists a
+        # truncated copy via _truncate_reasoning_for_storage).
+        # Keep aligned with frontend REASONING_RENDER_CAP and backend
+        # MAX_STORED_REASONING_CHARS.
+        MAX_REASONING_STREAM_CHARS = 4 * 1024  # 4 KB
+        # Use a single-element list as a mutable counter accessible from closure.
+        reasoning_chars_sent = [0]
+        reasoning_capped_notified = [False]
+
         def on_event(event: dict):
             if request_id not in self.sse_queues:
                 return
@@ -168,7 +258,25 @@ class WebChannel(ChatChannel):
             event_type = event.get("type")
             data = event.get("data", {})
 
-            if event_type == "message_update":
+            if event_type == "reasoning_update":
+                delta = data.get("delta", "")
+                if not delta:
+                    return
+                remaining = MAX_REASONING_STREAM_CHARS - reasoning_chars_sent[0]
+                if remaining <= 0:
+                    if not reasoning_capped_notified[0]:
+                        reasoning_capped_notified[0] = True
+                        q.put({
+                            "type": "reasoning",
+                            "content": "\n\n... [reasoning truncated for display] ...",
+                        })
+                    return
+                if len(delta) > remaining:
+                    delta = delta[:remaining]
+                reasoning_chars_sent[0] += len(delta)
+                q.put({"type": "reasoning", "content": delta})
+
+            elif event_type == "message_update":
                 delta = data.get("delta", "")
                 if delta:
                     q.put({"type": "delta", "content": delta})
@@ -194,6 +302,30 @@ class WebChannel(ChatChannel):
                     "result": result_str,
                     "execution_time": round(exec_time, 2)
                 })
+
+            elif event_type == "message_end":
+                tool_calls = data.get("tool_calls", [])
+                if tool_calls:
+                    q.put({"type": "message_end", "has_tool_calls": True})
+
+            elif event_type == "agent_end":
+                # Safety net: if the agent finishes with an empty final_response,
+                # chat_channel skips _send_reply (because reply.content is empty),
+                # which means no "done" event is ever emitted and the SSE stream
+                # would hang until the 10-min idle timeout. Push a fallback "done"
+                # here so the frontend always gets closure.
+                final_response = data.get("final_response", "")
+                if not final_response or not str(final_response).strip():
+                    logger.warning(
+                        f"[WebChannel] agent_end with empty final_response for "
+                        f"request {request_id}, sending fallback done"
+                    )
+                    q.put({
+                        "type": "done",
+                        "content": "(模型未返回任何内容，请重试或换一种方式描述你的需求)",
+                        "request_id": request_id,
+                        "timestamp": time.time(),
+                    })
 
             elif event_type == "file_to_send":
                 file_path = data.get("path", "")
@@ -329,14 +461,18 @@ class WebChannel(ChatChannel):
         """
         SSE generator for a given request_id.
         Yields UTF-8 encoded bytes to avoid WSGI Latin-1 mangling.
+        Supports client reconnection: the queue is only removed after a
+        "done" event is consumed, so a new GET /stream with the same
+        request_id can resume reading remaining events.
         """
         if request_id not in self.sse_queues:
             yield b"data: {\"type\": \"error\", \"message\": \"invalid request_id\"}\n\n"
             return
 
         q = self.sse_queues[request_id]
-        timeout = 300  # 5 minutes max
-        deadline = time.time() + timeout
+        idle_timeout = 600  # 10 minutes without any real event
+        deadline = time.time() + idle_timeout
+        done = False
 
         try:
             while time.time() < deadline:
@@ -346,13 +482,18 @@ class WebChannel(ChatChannel):
                     yield b": keepalive\n\n"
                     continue
 
+                # Real event received, reset idle deadline
+                deadline = time.time() + idle_timeout
+
                 payload = json.dumps(item, ensure_ascii=False)
                 yield f"data: {payload}\n\n".encode("utf-8")
 
                 if item.get("type") == "done":
+                    done = True
                     break
         finally:
-            self.sse_queues.pop(request_id, None)
+            if done:
+                self.sse_queues.pop(request_id, None)
 
     def poll_response(self):
         """
@@ -421,6 +562,9 @@ class WebChannel(ChatChannel):
 
         urls = (
             '/', 'RootHandler',
+            '/auth/login', 'AuthLoginHandler',
+            '/auth/check', 'AuthCheckHandler',
+            '/auth/logout', 'AuthLogoutHandler',
             '/message', 'MessageHandler',
             '/upload', 'UploadHandler',
             '/uploads/(.*)', 'UploadsHandler',
@@ -435,7 +579,14 @@ class WebChannel(ChatChannel):
             '/api/skills', 'SkillsHandler',
             '/api/memory', 'MemoryHandler',
             '/api/memory/content', 'MemoryContentHandler',
+            '/api/knowledge/list', 'KnowledgeListHandler',
+            '/api/knowledge/read', 'KnowledgeReadHandler',
+            '/api/knowledge/graph', 'KnowledgeGraphHandler',
             '/api/scheduler', 'SchedulerHandler',
+            '/api/sessions', 'SessionsHandler',
+            '/api/sessions/(.*)/generate_title', 'SessionTitleHandler',
+            '/api/sessions/(.*)/clear_context', 'SessionClearContextHandler',
+            '/api/sessions/(.*)', 'SessionDetailHandler',
             '/api/history', 'HistoryHandler',
             '/api/logs', 'LogsHandler',
             '/api/version', 'VersionHandler',
@@ -454,8 +605,14 @@ class WebChannel(ChatChannel):
         func = web.httpserver.StaticMiddleware(app.wsgifunc())
         func = web.httpserver.LogMiddleware(func)
         server = web.httpserver.WSGIServer(("0.0.0.0", port), func)
-        # Allow concurrent requests by not blocking on in-flight handler threads
         server.daemon_threads = True
+        # Default request_queue_size(5) / timeout(10s) / numthreads(10) are
+        # too small: when SSE streams occupy many threads, the backlog fills
+        # and new connections get refused (ERR_CONNECTION_ABORTED).
+        server.request_queue_size = 128
+        server.timeout = 300
+        server.requests.min = 20
+        server.requests.max = 80
         self._http_server = server
         try:
             server.start()
@@ -474,24 +631,62 @@ class WebChannel(ChatChannel):
 
 class RootHandler:
     def GET(self):
-        # 重定向到/chat
         raise web.seeother('/chat')
+
+
+class AuthCheckHandler:
+    def GET(self):
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        if not _is_password_enabled():
+            return json.dumps({"status": "success", "auth_required": False})
+        if _check_auth():
+            return json.dumps({"status": "success", "auth_required": True, "authenticated": True})
+        return json.dumps({"status": "success", "auth_required": True, "authenticated": False})
+
+
+class AuthLoginHandler:
+    def POST(self):
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        if not _is_password_enabled():
+            return json.dumps({"status": "success"})
+        try:
+            data = json.loads(web.data())
+        except Exception:
+            return json.dumps({"status": "error", "message": "Invalid request"})
+        password = data.get("password", "")
+        expected = conf().get("web_password", "")
+        if not hmac.compare_digest(password, expected):
+            logger.warning("[WebChannel] Invalid login attempt")
+            return json.dumps({"status": "error", "message": "Wrong password"})
+        token = _create_auth_token()
+        web.setcookie("cow_auth_token", token, expires=_session_expire_seconds(),
+                       path="/", httponly=True, samesite="Lax")
+        return json.dumps({"status": "success"})
+
+
+class AuthLogoutHandler:
+    def POST(self):
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        web.setcookie("cow_auth_token", "", expires=-1, path="/")
+        return json.dumps({"status": "success"})
 
 
 class MessageHandler:
     def POST(self):
+        _require_auth()
         return WebChannel().post_message()
 
 
 class UploadHandler:
     def POST(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         return WebChannel().upload_file()
 
 
 class UploadsHandler:
     def GET(self, file_name):
-        """Serve uploaded files from workspace/tmp/ for preview."""
+        _require_auth()
         try:
             upload_dir = _get_upload_dir()
             full_path = os.path.normpath(os.path.join(upload_dir, file_name))
@@ -513,7 +708,7 @@ class UploadsHandler:
 
 class FileServeHandler:
     def GET(self):
-        """Serve a local file by absolute path (for agent send tool)."""
+        _require_auth()
         try:
             params = web.input(path="")
             file_path = params.path
@@ -539,11 +734,13 @@ class FileServeHandler:
 
 class PollHandler:
     def POST(self):
+        _require_auth()
         return WebChannel().poll_response()
 
 
 class StreamHandler:
     def GET(self):
+        _require_auth()
         params = web.input(request_id='')
         request_id = params.request_id
         if not request_id:
@@ -559,74 +756,72 @@ class StreamHandler:
 
 class ChatHandler:
     def GET(self):
-        # 正常返回聊天页面
+        web.header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        web.header('Pragma', 'no-cache')
         file_path = os.path.join(os.path.dirname(__file__), 'chat.html')
         with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read()
+            html = f.read()
+        cache_bust = str(int(time.time()))
+        html = html.replace('assets/js/console.js', f'assets/js/console.js?v={cache_bust}')
+        html = html.replace('assets/css/console.css', f'assets/css/console.css?v={cache_bust}')
+        return html
 
 
 class ConfigHandler:
 
     _RECOMMENDED_MODELS = [
-        const.MINIMAX_M2_7, const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING,
-        const.GLM_5_TURBO, const.GLM_5, const.GLM_4_7,
-        const.QWEN36_PLUS, const.QWEN35_PLUS, const.QWEN3_MAX,
-        const.KIMI_K2_5, const.KIMI_K2,
-        const.DOUBAO_SEED_2_PRO, const.DOUBAO_SEED_2_CODE,
-        const.CLAUDE_4_6_SONNET, const.CLAUDE_4_6_OPUS, const.CLAUDE_4_5_SONNET,
+        const.DEEPSEEK_V4_FLASH, const.DEEPSEEK_V4_PRO, const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER,
+        const.MINIMAX_M2_7_HIGHSPEED, const.MINIMAX_M2_7, const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING,
+        const.CLAUDE_4_6_SONNET, const.CLAUDE_4_7_OPUS, const.CLAUDE_4_6_OPUS, const.CLAUDE_4_5_SONNET,
         const.GEMINI_31_FLASH_LITE_PRE, const.GEMINI_31_PRO_PRE, const.GEMINI_3_FLASH_PRE,
         const.GPT_54, const.GPT_54_MINI, const.GPT_54_NANO, const.GPT_5, const.GPT_41, const.GPT_4o,
-        const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER,
+        const.GLM_5_1, const.GLM_5_TURBO, const.GLM_5, const.GLM_4_7,
+        const.QWEN36_PLUS, const.QWEN35_PLUS, const.QWEN3_MAX,
+        const.DOUBAO_SEED_2_PRO, const.DOUBAO_SEED_2_CODE,
+        const.KIMI_K2_6, const.KIMI_K2_5, const.KIMI_K2,
     ]
 
+    # Generic placeholder hints surfaced in the web console. We deliberately
+    # show the version-path tail (e.g. "/v1") so users are reminded to type
+    # the full base URL. The form is intentionally vague (`...../v1`) so it
+    # never looks like a real default a user might paste verbatim — and we
+    # never auto-rewrite anything on the server side.
+    _PLACEHOLDER_V1 = "https://...../v1"
+    _PLACEHOLDER_ZHIPU = "https://...../api/paas/v4"
+    _PLACEHOLDER_DOUBAO = "https://...../api/v3"
+    _PLACEHOLDER_GEMINI = "https://....."
+
     PROVIDER_MODELS = OrderedDict([
+        ("deepseek", {
+            "label": "DeepSeek",
+            "api_key_field": "deepseek_api_key",
+            "api_base_key": "deepseek_api_base",
+            "api_base_default": "https://api.deepseek.com/v1",
+            "api_base_placeholder": _PLACEHOLDER_V1,
+            "models": [const.DEEPSEEK_V4_FLASH, const.DEEPSEEK_V4_PRO, const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER],
+        }),
         ("minimax", {
             "label": "MiniMax",
             "api_key_field": "minimax_api_key",
             "api_base_key": None,
             "api_base_default": None,
-            "models": [const.MINIMAX_M2_7, const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING],
-        }),
-        ("zhipu", {
-            "label": "智谱AI",
-            "api_key_field": "zhipu_ai_api_key",
-            "api_base_key": "zhipu_ai_api_base",
-            "api_base_default": "https://open.bigmodel.cn/api/paas/v4",
-            "models": [const.GLM_5_TURBO, const.GLM_5, const.GLM_4_7],
-        }),
-        ("dashscope", {
-            "label": "通义千问",
-            "api_key_field": "dashscope_api_key",
-            "api_base_key": None,
-            "api_base_default": None,
-            "models": [const.QWEN36_PLUS, const.QWEN35_PLUS, const.QWEN3_MAX],
-        }),
-        ("moonshot", {
-            "label": "Kimi",
-            "api_key_field": "moonshot_api_key",
-            "api_base_key": "moonshot_base_url",
-            "api_base_default": "https://api.moonshot.cn/v1",
-            "models": [const.KIMI_K2_5, const.KIMI_K2],
-        }),
-        ("doubao", {
-            "label": "豆包",
-            "api_key_field": "ark_api_key",
-            "api_base_key": "ark_base_url",
-            "api_base_default": "https://ark.cn-beijing.volces.com/api/v3",
-            "models": [const.DOUBAO_SEED_2_PRO, const.DOUBAO_SEED_2_CODE],
+            "api_base_placeholder": "",
+            "models": [const.MINIMAX_M2_7, const.MINIMAX_M2_7_HIGHSPEED, const.MINIMAX_M2_5, const.MINIMAX_M2_1, const.MINIMAX_M2_1_LIGHTNING],
         }),
         ("claudeAPI", {
             "label": "Claude",
             "api_key_field": "claude_api_key",
             "api_base_key": "claude_api_base",
             "api_base_default": "https://api.anthropic.com/v1",
-            "models": [const.CLAUDE_4_6_SONNET, const.CLAUDE_4_6_OPUS, const.CLAUDE_4_5_SONNET],
+            "api_base_placeholder": _PLACEHOLDER_V1,
+            "models": [const.CLAUDE_4_6_SONNET, const.CLAUDE_4_7_OPUS, const.CLAUDE_4_6_OPUS, const.CLAUDE_4_5_SONNET],
         }),
         ("gemini", {
             "label": "Gemini",
             "api_key_field": "gemini_api_key",
             "api_base_key": "gemini_api_base",
             "api_base_default": "https://generativelanguage.googleapis.com",
+            "api_base_placeholder": _PLACEHOLDER_GEMINI,
             "models": [const.GEMINI_31_FLASH_LITE_PRE, const.GEMINI_31_PRO_PRE, const.GEMINI_3_FLASH_PRE],
         }),
         ("openai", {
@@ -634,20 +829,47 @@ class ConfigHandler:
             "api_key_field": "open_ai_api_key",
             "api_base_key": "open_ai_api_base",
             "api_base_default": "https://api.openai.com/v1",
+            "api_base_placeholder": _PLACEHOLDER_V1,
             "models": [const.GPT_54, const.GPT_54_MINI, const.GPT_54_NANO, const.GPT_5, const.GPT_41, const.GPT_4o],
         }),
-        ("deepseek", {
-            "label": "DeepSeek",
-            "api_key_field": "deepseek_api_key",
-            "api_base_key": "deepseek_api_base",
-            "api_base_default": "https://api.deepseek.com/v1",
-            "models": [const.DEEPSEEK_CHAT, const.DEEPSEEK_REASONER],
+        ("zhipu", {
+            "label": "智谱AI",
+            "api_key_field": "zhipu_ai_api_key",
+            "api_base_key": "zhipu_ai_api_base",
+            "api_base_default": "https://open.bigmodel.cn/api/paas/v4",
+            "api_base_placeholder": _PLACEHOLDER_ZHIPU,
+            "models": [const.GLM_5_1, const.GLM_5_TURBO, const.GLM_5, const.GLM_4_7],
+        }),
+        ("dashscope", {
+            "label": "通义千问",
+            "api_key_field": "dashscope_api_key",
+            "api_base_key": None,
+            "api_base_default": None,
+            "api_base_placeholder": "",
+            "models": [const.QWEN36_PLUS, const.QWEN35_PLUS, const.QWEN3_MAX],
+        }),
+        ("doubao", {
+            "label": "豆包",
+            "api_key_field": "ark_api_key",
+            "api_base_key": "ark_base_url",
+            "api_base_default": "https://ark.cn-beijing.volces.com/api/v3",
+            "api_base_placeholder": _PLACEHOLDER_DOUBAO,
+            "models": [const.DOUBAO_SEED_2_PRO, const.DOUBAO_SEED_2_CODE],
+        }),
+        ("moonshot", {
+            "label": "Kimi",
+            "api_key_field": "moonshot_api_key",
+            "api_base_key": "moonshot_base_url",
+            "api_base_default": "https://api.moonshot.cn/v1",
+            "api_base_placeholder": _PLACEHOLDER_V1,
+            "models": [const.KIMI_K2_6, const.KIMI_K2_5, const.KIMI_K2],
         }),
         ("modelscope", {
             "label": "ModelScope",
             "api_key_field": "modelscope_api_key",
             "api_base_key": None,
             "api_base_default": None,
+            "api_base_placeholder": "",
             "models": [const.QWEN3_5_27B, const.QWEN3_235B_A22B_INSTRUCT_2507],
         }),
         ("linkai", {
@@ -655,18 +877,28 @@ class ConfigHandler:
             "api_key_field": "linkai_api_key",
             "api_base_key": None,
             "api_base_default": None,
+            "api_base_placeholder": "",
             "models": _RECOMMENDED_MODELS,
+        }),
+        ("custom", {
+            "label": "自定义",
+            "api_key_field": "custom_api_key",
+            "api_base_key": "custom_api_base",
+            "api_base_default": "",
+            "api_base_placeholder": _PLACEHOLDER_V1,
+            "models": [],
         }),
     ])
 
     EDITABLE_KEYS = {
         "model", "bot_type", "use_linkai",
         "open_ai_api_base", "deepseek_api_base", "claude_api_base", "gemini_api_base",
-        "zhipu_ai_api_base", "moonshot_base_url", "ark_base_url",
+        "zhipu_ai_api_base", "moonshot_base_url", "ark_base_url", "custom_api_base",
         "open_ai_api_key", "deepseek_api_key", "claude_api_key", "gemini_api_key",
         "zhipu_ai_api_key", "dashscope_api_key", "moonshot_api_key",
-        "ark_api_key", "minimax_api_key", "linkai_api_key",
+        "ark_api_key", "minimax_api_key", "linkai_api_key", "custom_api_key",
         "agent_max_context_tokens", "agent_max_context_turns", "agent_max_steps",
+        "enable_thinking", "web_password",
     }
 
     @staticmethod
@@ -677,7 +909,7 @@ class ConfigHandler:
         return value[:4] + "*" * (len(value) - 8) + value[-4:]
 
     def GET(self):
-        """Return configuration info and provider/model metadata."""
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             local_config = conf()
@@ -702,8 +934,12 @@ class ConfigHandler:
                     "models": p["models"],
                     "api_base_key": p["api_base_key"],
                     "api_base_default": p["api_base_default"],
+                    "api_base_placeholder": p.get("api_base_placeholder", ""),
                     "api_key_field": p.get("api_key_field"),
                 }
+
+            raw_pwd = local_config.get("web_password", "")
+            masked_pwd = ("*" * len(raw_pwd)) if raw_pwd else ""
 
             return json.dumps({
                 "status": "success",
@@ -715,17 +951,19 @@ class ConfigHandler:
                 "channel_type": local_config.get("channel_type", ""),
                 "agent_max_context_tokens": local_config.get("agent_max_context_tokens", 50000),
                 "agent_max_context_turns": local_config.get("agent_max_context_turns", 20),
-                "agent_max_steps": local_config.get("agent_max_steps", 15),
+                "agent_max_steps": local_config.get("agent_max_steps", 20),
+                "enable_thinking": bool(local_config.get("enable_thinking", False)),
                 "api_bases": api_bases,
                 "api_keys": api_keys_masked,
                 "providers": providers,
+                "web_password_masked": masked_pwd,
             }, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Error getting config: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     def POST(self):
-        """Update configuration values in memory and persist to config.json."""
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             data = json.loads(web.data())
@@ -740,7 +978,7 @@ class ConfigHandler:
                     continue
                 if key in ("agent_max_context_tokens", "agent_max_context_turns", "agent_max_steps"):
                     value = int(value)
-                if key == "use_linkai":
+                if key in ("use_linkai", "enable_thinking"):
                     value = bool(value)
                 local_config[key] = value
                 applied[key] = value
@@ -760,6 +998,19 @@ class ConfigHandler:
                 json.dump(file_cfg, f, indent=4, ensure_ascii=False)
 
             logger.info(f"[WebChannel] Config updated: {list(applied.keys())}")
+
+            # Reset Bridge so that bot routing reflects the new config.
+            # Without this, Bridge keeps its cached bot instance (e.g. LinkAIBot)
+            # even after the user switches bot_type / use_linkai / model in UI.
+            bridge_routing_keys = {"bot_type", "use_linkai", "model"}
+            if any(k in applied for k in bridge_routing_keys):
+                try:
+                    from bridge.bridge import Bridge
+                    Bridge().reset_bot()
+                    logger.info("[WebChannel] Bridge bot routing reset due to config change")
+                except Exception as reset_err:
+                    logger.warning(f"[WebChannel] Failed to reset bridge: {reset_err}")
+
             return json.dumps({"status": "success", "applied": applied}, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Error updating config: {e}")
@@ -874,6 +1125,7 @@ class ChannelsHandler:
         return set(cls._parse_channel_list(conf().get("channel_type", "")))
 
     def GET(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             local_config = conf()
@@ -911,6 +1163,7 @@ class ChannelsHandler:
             return json.dumps({"status": "error", "message": str(e)})
 
     def POST(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             body = json.loads(web.data())
@@ -1164,6 +1417,7 @@ class WeixinQrHandler:
         return None
 
     def GET(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             running_ch = self._get_running_channel()
@@ -1196,6 +1450,7 @@ class WeixinQrHandler:
             return json.dumps({"status": "error", "message": str(e)})
 
     def POST(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             body = json.loads(web.data())
@@ -1283,6 +1538,7 @@ def _get_workspace_root():
 
 class ToolsHandler:
     def GET(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             from agent.tools.tool_manager import ToolManager
@@ -1307,6 +1563,7 @@ class ToolsHandler:
 
 class SkillsHandler:
     def GET(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             from agent.skills.service import SkillService
@@ -1321,6 +1578,7 @@ class SkillsHandler:
             return json.dumps({"status": "error", "message": str(e)})
 
     def POST(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             from agent.skills.service import SkillService
@@ -1347,13 +1605,17 @@ class SkillsHandler:
 
 class MemoryHandler:
     def GET(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             from agent.memory.service import MemoryService
-            params = web.input(page='1', page_size='20')
+            params = web.input(page='1', page_size='20', category='memory')
             workspace_root = _get_workspace_root()
             service = MemoryService(workspace_root)
-            result = service.list_files(page=int(params.page), page_size=int(params.page_size))
+            result = service.list_files(
+                page=int(params.page), page_size=int(params.page_size),
+                category=params.category,
+            )
             return json.dumps({"status": "success", **result}, ensure_ascii=False)
         except Exception as e:
             logger.error(f"[WebChannel] Memory API error: {e}")
@@ -1362,15 +1624,16 @@ class MemoryHandler:
 
 class MemoryContentHandler:
     def GET(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             from agent.memory.service import MemoryService
-            params = web.input(filename='')
+            params = web.input(filename='', category='memory')
             if not params.filename:
                 return json.dumps({"status": "error", "message": "filename required"})
             workspace_root = _get_workspace_root()
             service = MemoryService(workspace_root)
-            result = service.get_content(params.filename)
+            result = service.get_content(params.filename, category=params.category)
             return json.dumps({"status": "success", **result}, ensure_ascii=False)
         except ValueError:
             return json.dumps({"status": "error", "message": "invalid filename"})
@@ -1383,6 +1646,7 @@ class MemoryContentHandler:
 
 class SchedulerHandler:
     def GET(self):
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             from agent.tools.scheduler.task_store import TaskStore
@@ -1396,16 +1660,138 @@ class SchedulerHandler:
             return json.dumps({"status": "error", "message": str(e)})
 
 
+class SessionsHandler:
+    def GET(self):
+        _require_auth()
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            params = web.input(page='1', page_size='50')
+            from agent.memory import get_conversation_store
+            store = get_conversation_store()
+            result = store.list_sessions(
+                channel_type="web",
+                page=int(params.page),
+                page_size=int(params.page_size),
+            )
+            return json.dumps({"status": "success", **result}, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"[WebChannel] Sessions API error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+
+class SessionDetailHandler:
+    def DELETE(self, session_id: str):
+        _require_auth()
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        logger.info(f"[WebChannel] DELETE session request: {session_id}")
+        try:
+            if not session_id:
+                return json.dumps({"status": "error", "message": "session_id required"})
+
+            from agent.memory import get_conversation_store
+            store = get_conversation_store()
+            store.clear_session(session_id)
+
+            # Also remove the Agent instance from AgentBridge if exists
+            try:
+                from bridge.bridge import Bridge
+                ab = Bridge().get_agent_bridge()
+                if session_id in ab.agents:
+                    del ab.agents[session_id]
+                    logger.info(f"[WebChannel] Removed agent instance for session {session_id}")
+            except Exception:
+                pass
+
+            channel = WebChannel()
+            channel.session_queues.pop(session_id, None)
+
+            logger.info(f"[WebChannel] Session deleted: {session_id}")
+            return json.dumps({"status": "success"})
+        except Exception as e:
+            logger.error(f"[WebChannel] Session delete error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    def PUT(self, session_id: str):
+        _require_auth()
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            if not session_id:
+                return json.dumps({"status": "error", "message": "session_id required"})
+            body = json.loads(web.data())
+            title = body.get("title", "").strip()
+            if not title:
+                return json.dumps({"status": "error", "message": "title required"})
+
+            from agent.memory import get_conversation_store
+            store = get_conversation_store()
+            found = store.rename_session(session_id, title)
+            if not found:
+                return json.dumps({"status": "error", "message": "session not found"})
+            return json.dumps({"status": "success"})
+        except Exception as e:
+            logger.error(f"[WebChannel] Session rename error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+
+class SessionTitleHandler:
+    def POST(self, session_id: str):
+        _require_auth()
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            if not session_id:
+                return json.dumps({"status": "error", "message": "session_id required"})
+
+            body = json.loads(web.data())
+            user_message = body.get("user_message", "")
+            assistant_reply = body.get("assistant_reply", "")
+            if not user_message:
+                return json.dumps({"status": "error", "message": "user_message required"})
+
+            title = _generate_session_title(user_message, assistant_reply)
+
+            from agent.memory import get_conversation_store
+            store = get_conversation_store()
+            updated = store.rename_session(session_id, title)
+            logger.info(f"[WebChannel] Session title set: sid={session_id}, title='{title}', db_updated={updated}")
+
+            return json.dumps({"status": "success", "title": title}, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"[WebChannel] Title generation error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+
+class SessionClearContextHandler:
+    def POST(self, session_id: str):
+        _require_auth()
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            if not session_id:
+                return json.dumps({"status": "error", "message": "session_id required"})
+
+            from agent.memory import get_conversation_store
+            store = get_conversation_store()
+            new_seq = store.clear_context(session_id)
+
+            # Delete the agent instance so a fresh one is created on the next message
+            try:
+                from bridge.bridge import Bridge
+                bridge = Bridge()
+                ab = bridge.get_agent_bridge()
+                if session_id in ab.agents:
+                    del ab.agents[session_id]
+                    logger.info(f"[WebChannel] Cleared agent instance for session {session_id}")
+            except Exception:
+                pass
+
+            return json.dumps({"status": "success", "context_start_seq": new_seq})
+        except Exception as e:
+            logger.error(f"[WebChannel] Clear context error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+
 class HistoryHandler:
     def GET(self):
-        """
-        Return paginated conversation history for a session.
-
-        Query params:
-            session_id  (required)
-            page        int, default 1  (1 = most recent messages)
-            page_size   int, default 20
-        """
+        _require_auth()
         web.header('Content-Type', 'application/json; charset=utf-8')
         web.header('Access-Control-Allow-Origin', '*')
         try:
@@ -1429,7 +1815,7 @@ class HistoryHandler:
 
 class LogsHandler:
     def GET(self):
-        """Stream the last N lines of run.log as SSE, then tail new lines."""
+        _require_auth()
         web.header('Content-Type', 'text/event-stream; charset=utf-8')
         web.header('Cache-Control', 'no-cache')
         web.header('X-Accel-Buffering', 'no')
@@ -1513,6 +1899,50 @@ class AssetsHandler:
         except Exception as e:
             logger.error(f"Error serving static file: {e}", exc_info=True)  # 添加更详细的错误信息
             raise web.notfound()
+
+
+class KnowledgeListHandler:
+    def GET(self):
+        _require_auth()
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            from agent.knowledge.service import KnowledgeService
+            svc = KnowledgeService(_get_workspace_root())
+            result = svc.list_tree()
+            return json.dumps({"status": "success", **result}, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"[WebChannel] Knowledge list error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+
+class KnowledgeReadHandler:
+    def GET(self):
+        _require_auth()
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            from agent.knowledge.service import KnowledgeService
+            params = web.input(path='')
+            svc = KnowledgeService(_get_workspace_root())
+            result = svc.read_file(params.path)
+            return json.dumps({"status": "success", **result}, ensure_ascii=False)
+        except (ValueError, FileNotFoundError) as e:
+            return json.dumps({"status": "error", "message": str(e)})
+        except Exception as e:
+            logger.error(f"[WebChannel] Knowledge read error: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+
+class KnowledgeGraphHandler:
+    def GET(self):
+        _require_auth()
+        web.header('Content-Type', 'application/json; charset=utf-8')
+        try:
+            from agent.knowledge.service import KnowledgeService
+            svc = KnowledgeService(_get_workspace_root())
+            return json.dumps(svc.build_graph(), ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"[WebChannel] Knowledge graph error: {e}")
+            return json.dumps({"nodes": [], "links": []})
 
 
 class VersionHandler:

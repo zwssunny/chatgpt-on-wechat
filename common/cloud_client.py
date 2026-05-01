@@ -47,14 +47,16 @@ CREDENTIAL_MAP = {
 
 
 class CloudClient(LinkAIClient):
-    def __init__(self, api_key: str, channel, host: str = ""):
-        super().__init__(api_key, host)
+    def __init__(self, api_key: str, channel, host: str = "", port=None):
+        super().__init__(api_key, host, port=port)
         self.channel = channel
         self.client_type = channel.channel_type
         self.channel_mgr = None
         self._skill_service = None
         self._memory_service = None
+        self._knowledge_service = None
         self._chat_service = None
+        self._session_service = None
 
     @property
     def skill_service(self):
@@ -89,6 +91,21 @@ class CloudClient(LinkAIClient):
         return self._memory_service
 
     @property
+    def knowledge_service(self):
+        """Lazy-init KnowledgeService."""
+        if self._knowledge_service is None:
+            try:
+                from agent.knowledge.service import KnowledgeService
+                from config import conf
+                from common.utils import expand_path
+                workspace_root = expand_path(conf().get("agent_workspace", "~/cow"))
+                self._knowledge_service = KnowledgeService(workspace_root)
+                logger.debug("[CloudClient] KnowledgeService initialised")
+            except Exception as e:
+                logger.error(f"[CloudClient] Failed to init KnowledgeService: {e}")
+        return self._knowledge_service
+
+    @property
     def chat_service(self):
         """Lazy-init ChatService (requires AgentBridge via Bridge singleton)."""
         if self._chat_service is None:
@@ -101,6 +118,18 @@ class CloudClient(LinkAIClient):
             except Exception as e:
                 logger.error(f"[CloudClient] Failed to init ChatService: {e}")
         return self._chat_service
+
+    @property
+    def session_service(self):
+        """Lazy-init SessionService."""
+        if self._session_service is None:
+            try:
+                from agent.chat.session_service import SessionService
+                self._session_service = SessionService()
+                logger.debug("[CloudClient] SessionService initialised")
+            except Exception as e:
+                logger.error(f"[CloudClient] Failed to init SessionService: {e}")
+        return self._session_service
 
     # ------------------------------------------------------------------
     # message push callback
@@ -469,6 +498,27 @@ class CloudClient(LinkAIClient):
         return svc.dispatch(action, payload)
 
     # ------------------------------------------------------------------
+    # knowledge callback
+    # ------------------------------------------------------------------
+    def on_knowledge(self, data: dict) -> dict:
+        """
+        Handle KNOWLEDGE messages from the cloud console.
+        Delegates to KnowledgeService.dispatch for the actual operations.
+
+        :param data: message data with 'action', 'clientId', 'payload'
+        :return: response dict
+        """
+        action = data.get("action", "")
+        payload = data.get("payload")
+        logger.info(f"[CloudClient] on_knowledge: action={action}")
+
+        svc = self.knowledge_service
+        if svc is None:
+            return {"action": action, "code": 500, "message": "KnowledgeService not available", "payload": None}
+
+        return svc.dispatch(action, payload)
+
+    # ------------------------------------------------------------------
     # chat callback
     # ------------------------------------------------------------------
     def on_chat(self, data: dict, send_chunk_fn):
@@ -509,12 +559,23 @@ class CloudClient(LinkAIClient):
     # ------------------------------------------------------------------
     # history callback
     # ------------------------------------------------------------------
+    # Session-related actions handled via the HISTORY channel
+    _SESSION_ACTIONS = {
+        "list_sessions", "delete_session", "rename_session",
+        "clear_context", "generate_title",
+    }
+
     def on_history(self, data: dict) -> dict:
         """
         Handle HISTORY messages from the cloud console.
-        Returns paginated conversation history for a session.
 
-        :param data: message data with 'action' and 'payload' (session_id, page, page_size)
+        Supports both history query and session management actions
+        through a unified HISTORY message channel:
+          - query: paginated conversation history
+          - list_sessions / delete_session / rename_session /
+            clear_context / generate_title: session lifecycle
+
+        :param data: message data with 'action' and 'payload'
         :return: response dict
         """
         action = data.get("action", "query")
@@ -524,7 +585,18 @@ class CloudClient(LinkAIClient):
         if action == "query":
             return self._query_history(payload)
 
+        if action in self._SESSION_ACTIONS:
+            return self._dispatch_session(action, payload)
+
         return {"action": action, "code": 404, "message": f"unknown action: {action}", "payload": None}
+
+    def _dispatch_session(self, action: str, payload: dict) -> dict:
+        """Delegate session actions to SessionService."""
+        svc = self.session_service
+        if svc is None:
+            return {"action": action, "code": 500,
+                    "message": "SessionService not available", "payload": None}
+        return svc.dispatch(action, payload)
 
     def _query_history(self, payload: dict) -> dict:
         """Query paginated conversation history using ConversationStore."""
@@ -733,7 +805,7 @@ def start(channel, channel_mgr=None):
         return
 
     global chat_client
-    chat_client = CloudClient(api_key=conf().get("linkai_api_key"), host=conf().get("cloud_host", ""), channel=channel)
+    chat_client = CloudClient(api_key=conf().get("linkai_api_key"), host=conf().get("cloud_host", ""), port=conf().get("cloud_port"), channel=channel)
     chat_client.channel_mgr = channel_mgr
     chat_client.config = _build_config()
     chat_client.start()

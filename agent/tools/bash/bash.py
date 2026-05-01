@@ -18,14 +18,18 @@ from common.utils import expand_path
 class Bash(BaseTool):
     """Tool for executing bash commands"""
 
+    _IS_WIN = sys.platform == "win32"
+
     name: str = "bash"
     description: str = f"""Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last {DEFAULT_MAX_LINES} lines or {DEFAULT_MAX_BYTES // 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file.
-
+{'''
+PLATFORM: Windows (cmd.exe). Do NOT use Unix-only commands like grep, head, tail, sed, awk.
+''' if _IS_WIN else ''}
 ENVIRONMENT: All API keys from env_config are auto-injected. Use $VAR_NAME directly.
 
 SAFETY:
 - Freely create/modify/delete files within the workspace
-- For destructive and out-of-workspace commands, explain and confirm first"""
+- For destructive commands out of workspace, explain and confirm first"""
 
     params: dict = {
         "type": "object",
@@ -103,13 +107,12 @@ SAFETY:
                 logger.debug(f"[Bash] Process User: {os.environ.get('USERNAME', os.environ.get('USER', 'unknown'))}")
             
             # On Windows, convert $VAR references to %VAR% for cmd.exe
-            if sys.platform == "win32":
+            if self._IS_WIN:
                 env["PYTHONIOENCODING"] = "utf-8"
                 command = self._convert_env_vars_for_windows(command, dotenv_vars)
                 if command and not command.strip().lower().startswith("chcp"):
                     command = f"chcp 65001 >nul 2>&1 && {command}"
 
-            # Execute command with inherited environment variables
             result = subprocess.run(
                 command,
                 shell=True,
@@ -120,7 +123,7 @@ SAFETY:
                 encoding="utf-8",
                 errors="replace",
                 timeout=timeout,
-                env=env
+                env=env,
             )
             
             logger.debug(f"[Bash] Exit code: {result.returncode}")
@@ -166,10 +169,16 @@ SAFETY:
                 except Exception as retry_err:
                     logger.warning(f"[Bash] Retry failed: {retry_err}")
 
-            # Combine stdout and stderr
-            output = result.stdout
-            if result.stderr:
-                output += "\n" + result.stderr
+            # When command succeeds with stdout, keep output clean (stderr goes to server log only).
+            # When command fails or stdout is empty, include stderr so the agent can diagnose.
+            if result.returncode == 0 and result.stdout.strip():
+                output = result.stdout
+                if result.stderr:
+                    logger.info(f"[Bash] stderr (not forwarded): {result.stderr[:500]}")
+            else:
+                output = result.stdout
+                if result.stderr:
+                    output += "\n" + result.stderr
 
             # Check if we need to save full output to temp file
             temp_file_path = None

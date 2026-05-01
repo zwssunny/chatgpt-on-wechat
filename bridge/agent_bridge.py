@@ -124,14 +124,15 @@ class AgentLLMModel(LLMModel):
 
     @property
     def bot(self):
-        """Lazy load the bot, re-create when model changes"""
+        """Lazy load the bot, re-create when model or bot_type changes"""
         from models.bot_factory import create_bot
         cur_model = self.model
-        if self._bot is None or self._bot_model != cur_model:
-            bot_type = self._resolve_bot_type(cur_model)
-            self._bot = create_bot(bot_type)
+        cur_bot_type = self._resolve_bot_type(cur_model)
+        if self._bot is None or self._bot_model != cur_model or getattr(self, '_bot_type', None) != cur_bot_type:
+            self._bot = create_bot(cur_bot_type)
             self._bot = add_openai_compatible_support(self._bot)
             self._bot_model = cur_model
+            self._bot_type = cur_bot_type
         return self._bot
 
     def call(self, request: LLMRequest):
@@ -159,12 +160,22 @@ class AgentLLMModel(LLMModel):
                     kwargs['system'] = system_prompt
 
                 # Pass context metadata to bot
-                channel_type = getattr(self, 'channel_type', None)
+                channel_type = getattr(self, 'channel_type', None) or ''
                 if channel_type:
                     kwargs['channel_type'] = channel_type
                 session_id = getattr(self, 'session_id', None)
                 if session_id:
                     kwargs['session_id'] = session_id
+
+                # Thinking mode is a global toggle independent of the channel.
+                # IM channels (WeChat/WeCom/DingTalk/Feishu) won't render the
+                # reasoning trace, but still benefit from the higher answer
+                # quality the thinking pass produces.
+                from config import conf
+                kwargs['thinking'] = (
+                    {"type": "enabled"} if conf().get("enable_thinking", False)
+                    else {"type": "disabled"}
+                )
 
                 response = self.bot.call_with_tools(**kwargs)
                 return self._format_response(response)
@@ -204,12 +215,22 @@ class AgentLLMModel(LLMModel):
                     kwargs['system'] = system_prompt
 
                 # Pass context metadata to bot
-                channel_type = getattr(self, 'channel_type', None)
+                channel_type = getattr(self, 'channel_type', None) or ''
                 if channel_type:
                     kwargs['channel_type'] = channel_type
                 session_id = getattr(self, 'session_id', None)
                 if session_id:
                     kwargs['session_id'] = session_id
+
+                # Thinking mode is a global toggle independent of the channel.
+                # IM channels (WeChat/WeCom/DingTalk/Feishu) won't render the
+                # reasoning trace, but still benefit from the higher answer
+                # quality the thinking pass produces.
+                from config import conf
+                kwargs['thinking'] = (
+                    {"type": "enabled"} if conf().get("enable_thinking", False)
+                    else {"type": "disabled"}
+                )
 
                 stream = self.bot.call_with_tools(**kwargs)
                 
@@ -429,7 +450,7 @@ class AgentBridge:
                         except Exception as e:
                             logger.warning(f"[AgentBridge] Failed to clear DB after recovery: {e}")
             
-            # Check if there are files to send (from read tool)
+            # Check if there are files to send (from send/read tool)
             if hasattr(agent, 'stream_executor') and hasattr(agent.stream_executor, 'files_to_send'):
                 files_to_send = agent.stream_executor.files_to_send
                 if files_to_send:
@@ -498,22 +519,26 @@ class AgentBridge:
                 reply.text_content = text_response
             return reply
         
-        # For other unknown file types, return text with file info
-        message = text_response or file_info.get("message", "文件已准备")
-        message += f"\n\n[文件: {file_info.get('file_name', file_path)}]"
-        return Reply(ReplyType.TEXT, message)
+        # For all other file types (tar.gz, zip, etc.), also use FILE type
+        file_url = f"file://{file_path}"
+        logger.info(f"[AgentBridge] Sending generic file: {file_url}")
+        reply = Reply(ReplyType.FILE, file_url)
+        reply.file_name = file_info.get("file_name", os.path.basename(file_path))
+        if text_response:
+            reply.text_content = text_response
+        return reply
     
     def _migrate_config_to_env(self, workspace_root: str):
         """
-        Migrate API keys from config.json to .env file if not already set
-        
+        Sync API keys from config.json to .env file.
+        Adds new keys and updates changed values on each startup.
+
         Args:
             workspace_root: Workspace directory path (not used, kept for compatibility)
         """
         from config import conf
         import os
         
-        # Mapping from config.json keys to environment variable names
         key_mapping = {
             "open_ai_api_key": "OPENAI_API_KEY",
             "open_ai_api_base": "OPENAI_API_BASE",
@@ -522,10 +547,9 @@ class AgentBridge:
             "linkai_api_key": "LINKAI_API_KEY",
         }
         
-        # Use fixed secure location for .env file
         env_file = expand_path("~/.cow/.env")
         
-        # Read existing env vars from .env file
+        # Read existing env vars (key -> value)
         existing_env_vars = {}
         if os.path.exists(env_file):
             try:
@@ -533,48 +557,46 @@ class AgentBridge:
                     for line in f:
                         line = line.strip()
                         if line and not line.startswith('#') and '=' in line:
-                            key, _ = line.split('=', 1)
-                            existing_env_vars[key.strip()] = True
+                            key, val = line.split('=', 1)
+                            existing_env_vars[key.strip()] = val.strip()
             except Exception as e:
                 logger.warning(f"[AgentBridge] Failed to read .env file: {e}")
         
-        # Check which keys need to be migrated
-        keys_to_migrate = {}
+        # Sync config.json values into .env (add/update/remove)
+        updated = False
         for config_key, env_key in key_mapping.items():
-            # Skip if already in .env file
-            if env_key in existing_env_vars:
-                continue
-            
-            # Get value from config.json
-            value = conf().get(config_key, "")
-            if value and value.strip():  # Only migrate non-empty values
-                keys_to_migrate[env_key] = value.strip()
-        
-        # Log summary if there are keys to skip
-        if existing_env_vars:
-            logger.debug(f"[AgentBridge] {len(existing_env_vars)} env vars already in .env")
-        
-        # Write new keys to .env file
-        if keys_to_migrate:
+            raw = conf().get(config_key, "")
+            value = raw.strip() if raw else ""
+            old_value = existing_env_vars.get(env_key)
+
+            if value:
+                if old_value == value:
+                    continue
+                existing_env_vars[env_key] = value
+                os.environ[env_key] = value
+                updated = True
+            else:
+                if old_value is None:
+                    continue
+                existing_env_vars.pop(env_key, None)
+                os.environ.pop(env_key, None)
+                updated = True
+            updated = True
+
+        if updated:
             try:
-                # Ensure ~/.cow directory and .env file exist
                 env_dir = os.path.dirname(env_file)
-                if not os.path.exists(env_dir):
-                    os.makedirs(env_dir, exist_ok=True)
-                if not os.path.exists(env_file):
-                    open(env_file, 'a').close()
-                
-                # Append new keys
-                with open(env_file, 'a', encoding='utf-8') as f:
-                    f.write('\n# Auto-migrated from config.json\n')
-                    for key, value in keys_to_migrate.items():
+                os.makedirs(env_dir, exist_ok=True)
+
+                with open(env_file, 'w', encoding='utf-8') as f:
+                    f.write('# Environment variables for agent\n')
+                    f.write('# Auto-managed - synced from config.json on startup\n\n')
+                    for key, value in sorted(existing_env_vars.items()):
                         f.write(f'{key}={value}\n')
-                        # Also set in current process
-                        os.environ[key] = value
-                
-                logger.info(f"[AgentBridge] Migrated {len(keys_to_migrate)} API keys from config.json to .env: {list(keys_to_migrate.keys())}")
+
+                logger.info(f"[AgentBridge] Synced API keys from config.json to .env")
             except Exception as e:
-                logger.warning(f"[AgentBridge] Failed to migrate API keys: {e}")
+                logger.warning(f"[AgentBridge] Failed to sync API keys: {e}")
     
     def _persist_messages(
         self, session_id: str, new_messages: list, channel_type: str = ""
@@ -590,17 +612,54 @@ class AgentBridge:
             from config import conf
             if not conf().get("conversation_persistence", True):
                 return
+            # When deep-thinking display is disabled, strip "thinking" content
+            # blocks before persisting so they don't resurface on history reload.
+            # The in-memory message list keeps them intact for this run's
+            # multi-turn LLM context.
+            thinking_enabled = bool(conf().get("enable_thinking", False))
         except Exception:
-            pass
+            thinking_enabled = False
+
+        messages_to_store = new_messages
+        if not thinking_enabled:
+            messages_to_store = self._strip_thinking_blocks(new_messages)
+
         try:
             from agent.memory import get_conversation_store
             get_conversation_store().append_messages(
-                session_id, new_messages, channel_type=channel_type
+                session_id, messages_to_store, channel_type=channel_type
             )
         except Exception as e:
             logger.warning(
                 f"[AgentBridge] Failed to persist messages for session={session_id}: {e}"
             )
+
+    @staticmethod
+    def _strip_thinking_blocks(messages: list) -> list:
+        """Return a shallow copy of messages with assistant "thinking" blocks removed."""
+        cleaned = []
+        for msg in messages:
+            if not isinstance(msg, dict):
+                cleaned.append(msg)
+                continue
+            if msg.get("role") != "assistant":
+                cleaned.append(msg)
+                continue
+            content = msg.get("content")
+            if not isinstance(content, list):
+                cleaned.append(msg)
+                continue
+            filtered_blocks = [
+                b for b in content
+                if not (isinstance(b, dict) and b.get("type") == "thinking")
+            ]
+            if len(filtered_blocks) == len(content):
+                cleaned.append(msg)
+            else:
+                new_msg = dict(msg)
+                new_msg["content"] = filtered_blocks
+                cleaned.append(new_msg)
+        return cleaned
 
     def clear_session(self, session_id: str):
         """

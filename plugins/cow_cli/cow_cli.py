@@ -31,6 +31,7 @@ KNOWN_COMMANDS = {
     "help", "version", "status", "logs",
     "start", "stop", "restart",
     "skill", "context", "config",
+    "knowledge", "memory",
     "install-browser",
 }
 
@@ -157,6 +158,10 @@ class CowCliPlugin(Plugin):
             "  /config              查看当前配置",
             "  /config <key>        查看某项配置",
             "  /config <key> <val>  修改配置",
+            "  /memory dream [N]    手动触发记忆蒸馏 (整理近N天, 默认3, 最多30)",
+            "  /knowledge           查看知识库统计",
+            "  /knowledge list      查看知识库文件树",
+            "  /knowledge on|off    开启/关闭知识库",
             "",
             "💡 也可以用 cow <command> 代替 /<command>",
         ]
@@ -169,7 +174,7 @@ class CowCliPlugin(Plugin):
     # status
     # ------------------------------------------------------------------
 
-    def _cmd_status(self, args: str, e_context: EventContext, session_id: str = "") -> str:
+    def _cmd_status(self, args: str, e_context: EventContext, session_id: str = "", **_) -> str:
         from config import conf
 
         cfg = conf()
@@ -251,7 +256,7 @@ class CowCliPlugin(Plugin):
     # context
     # ------------------------------------------------------------------
 
-    def _cmd_context(self, args: str, e_context: EventContext, session_id: str = "") -> str:
+    def _cmd_context(self, args: str, e_context: EventContext, session_id: str = "", **_) -> str:
         session_id = self._get_session_id(e_context, fallback=session_id)
         agent = self._get_agent(session_id)
 
@@ -310,6 +315,8 @@ class CowCliPlugin(Plugin):
         "agent_max_context_tokens",
         "agent_max_context_turns",
         "agent_max_steps",
+        "knowledge",
+        "enable_thinking",
     }
 
     _CONFIG_READABLE = _CONFIG_WRITABLE | {"channel_type"}
@@ -351,7 +358,7 @@ class CowCliPlugin(Plugin):
         return f"⚙️ {key}: {val}"
 
     def _config_set(self, key: str, value_str: str) -> str:
-        from config import conf, load_config
+        from config import conf, load_config, available_setting
         import json as _json
 
         if key not in self._CONFIG_WRITABLE:
@@ -373,11 +380,14 @@ class CowCliPlugin(Plugin):
                 new_val = value_str
 
         updates = {key: new_val}
+        old_bot_type = conf().get("bot_type", "")
 
-        if key == "model" and conf().get("bot_type"):
-            resolved = self._resolve_bot_type_for_model(str(new_val))
-            if resolved:
-                updates["bot_type"] = resolved
+        if key == "model" and old_bot_type:
+            from common import const
+            if old_bot_type not in (const.CUSTOM,):
+                resolved = self._resolve_bot_type_for_model(str(new_val))
+                if resolved:
+                    updates["bot_type"] = resolved
 
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         config_path = os.path.join(project_root, "config.json")
@@ -390,14 +400,30 @@ class CowCliPlugin(Plugin):
         except Exception as e:
             return f"写入 config.json 失败: {e}"
 
+        # Sync updated values to environment variables so that load_config()
+        # won't overwrite the new value with a stale env var (common in Docker).
+        # Match env var keys case-insensitively (Docker compose typically uses
+        # upper-case like MODEL, but lower-case is also possible).
+        synced_envs = {}
+        for k, v in updates.items():
+            if k not in available_setting:
+                continue
+            str_val = str(v)
+            k_lower = k.lower()
+            for env_key in list(os.environ):
+                if env_key.lower() == k_lower:
+                    os.environ[env_key] = str_val
+                    synced_envs[env_key] = str_val
+        logger.info(f"[CowCli] config update: {updates}, synced envs: {synced_envs}")
+
         try:
             load_config()
         except Exception as e:
             logger.warning(f"[CowCli] config reload warning: {e}")
 
         result = f"✅ 配置已更新\n\n  {key}: {old_val} → {new_val}"
-        if "bot_type" in updates and updates["bot_type"] != conf().get("bot_type"):
-            result += f"\n  bot_type: → {updates['bot_type']}"
+        if "bot_type" in updates and updates["bot_type"] != old_bot_type:
+            result += f"\n  bot_type: {old_bot_type} → {updates['bot_type']}"
         return result
 
     @staticmethod
@@ -514,8 +540,22 @@ class CowCliPlugin(Plugin):
                 "  disable <名称>   禁用技能"
             )
 
+    def _refresh_skill_manager(self):
+        """Re-scan skill directories so skills_config.json reflects disk state."""
+        try:
+            from bridge.bridge import Bridge
+            bridge = Bridge()
+            agent_bridge = bridge.get_agent_bridge()
+            for agent in [agent_bridge.default_agent] + list(agent_bridge.agents.values()):
+                if agent and hasattr(agent, 'skill_manager') and agent.skill_manager:
+                    agent.skill_manager.refresh_skills()
+                    break
+        except Exception as e:
+            logger.debug(f"[CowCli] skill refresh skipped: {e}")
+
     def _skill_list_local(self) -> str:
         from cli.utils import load_skills_config, get_skills_dir, get_builtin_skills_dir
+        self._refresh_skill_manager()
         config = load_skills_config()
 
         if not config:
@@ -850,6 +890,265 @@ class CowCliPlugin(Plugin):
         action = "启用" if enabled else "禁用"
         icon = "✅" if enabled else "⬚"
         return f"{icon} 技能 '{name}' 已{action}"
+
+    # ------------------------------------------------------------------
+    # memory
+    # ------------------------------------------------------------------
+
+    def _cmd_memory(self, args: str, e_context, session_id: str = "", **_) -> str:
+        parts = args.strip().split()
+        sub = parts[0].lower() if parts else ""
+
+        if sub == "dream":
+            days = 3
+            if len(parts) > 1 and parts[1].isdigit():
+                days = max(1, min(int(parts[1]), 30))
+            return self._memory_dream(days, e_context, session_id)
+        else:
+            return (
+                "用法: /memory <子命令>\n\n"
+                "子命令:\n"
+                "  dream [N]  手动触发记忆蒸馏 (整理近N天, 默认3, 最多30)"
+            )
+
+    def _memory_dream(self, days: int, e_context, session_id: str) -> str:
+        session_id = self._get_session_id(e_context, fallback=session_id)
+        agent = self._get_agent(session_id)
+
+        flush_mgr = None
+        if agent and agent.memory_manager:
+            flush_mgr = agent.memory_manager.flush_manager
+
+        if not flush_mgr:
+            try:
+                flush_mgr = self._create_standalone_flush_manager()
+            except Exception as e:
+                return f"⚠️ 无法初始化记忆蒸馏: {e}"
+
+        if not flush_mgr.llm_model:
+            return "⚠️ 未配置 LLM 模型，无法执行记忆蒸馏"
+
+        # SaaS (e_context is None): run synchronously, return full result
+        if e_context is None:
+            return self._memory_dream_sync(flush_mgr, days)
+
+        # Local channels: run in background, notify via channel.send()
+        is_web = self._is_web_channel(e_context)
+
+        def _run():
+            try:
+                result = flush_mgr.deep_dream(lookback_days=days, force=True)
+                if result:
+                    self._notify(e_context, self._build_dream_result(flush_mgr, is_web))
+                else:
+                    self._notify(e_context, "💤 记忆蒸馏跳过 — 没有新的记忆内容需要整理")
+            except Exception as e:
+                logger.warning(f"[CowCli] /memory dream failed: {e}")
+                self._notify(e_context, f"❌ 记忆蒸馏失败: {e}")
+
+        threading.Thread(target=_run, daemon=True).start()
+        return f"🌙 记忆蒸馏已启动 (整理近 {days} 天的记忆)\n\n整理在后台执行，完成后会通知你。"
+
+    def _memory_dream_sync(self, flush_mgr, days: int) -> str:
+        """Run deep dream synchronously and return the full result."""
+        try:
+            result = flush_mgr.deep_dream(lookback_days=days, force=True)
+            if result:
+                return self._build_dream_result(flush_mgr, is_web=True)
+            return "💤 记忆蒸馏跳过 — 没有新的记忆内容需要整理"
+        except Exception as e:
+            logger.warning(f"[CowCli] /memory dream sync failed: {e}")
+            return f"❌ 记忆蒸馏失败: {e}"
+
+    @staticmethod
+    def _notify(e_context, text: str):
+        """Push a notification message back to the chat channel."""
+        if e_context is None:
+            logger.info(f"[CowCli] {text}")
+            return
+        try:
+            channel = e_context["channel"]
+            context = e_context["context"]
+            if channel and context:
+                channel.send(Reply(ReplyType.TEXT, text), context)
+        except Exception as e:
+            logger.warning(f"[CowCli] notify failed: {e}")
+
+    @staticmethod
+    def _is_web_channel(e_context) -> bool:
+        if e_context is None:
+            return False
+        try:
+            return e_context["context"].kwargs.get("channel_type") == "web"
+        except Exception:
+            return False
+
+    @staticmethod
+    def _build_dream_result(flush_mgr, is_web: bool) -> str:
+        """Build dream completion message with diary content."""
+        from datetime import datetime
+        lines = ["✅ 记忆蒸馏完成"]
+
+        # Read today's dream diary
+        today = datetime.now().strftime("%Y-%m-%d")
+        diary_file = flush_mgr.memory_dir / "dreams" / f"{today}.md"
+        if diary_file.exists():
+            diary = diary_file.read_text(encoding="utf-8").strip()
+            # Strip the "# Dream Diary: ..." header line
+            diary_lines = diary.split("\n")
+            if diary_lines and diary_lines[0].startswith("# "):
+                diary = "\n".join(diary_lines[1:]).strip()
+            if diary:
+                lines.append(f"\n{diary}")
+
+        if is_web:
+            lines.append("\n[MEMORY.md](/memory/MEMORY.md) | [梦境日记](/memory/dreams)")
+        else:
+            lines.append("\nMEMORY.md 已更新")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _create_standalone_flush_manager():
+        """Create a MemoryFlushManager without a running agent (for pre-init dream)."""
+        from pathlib import Path
+        from config import conf
+        from common.utils import expand_path
+        from agent.memory.summarizer import MemoryFlushManager
+        from bridge.bridge import Bridge
+        from bridge.agent_bridge import AgentLLMModel
+
+        workspace = Path(expand_path(conf().get("agent_workspace", "~/cow")))
+        flush_mgr = MemoryFlushManager(workspace_dir=workspace)
+        flush_mgr.llm_model = AgentLLMModel(Bridge())
+        return flush_mgr
+
+    # ------------------------------------------------------------------
+    # knowledge
+    # ------------------------------------------------------------------
+
+    def _cmd_knowledge(self, args: str, e_context, **_) -> str:
+        sub = args.strip().lower().split(None, 1)[0] if args.strip() else ""
+
+        if sub == "on":
+            return self._knowledge_toggle(True)
+        elif sub == "off":
+            return self._knowledge_toggle(False)
+        elif sub in ("list", "tree"):
+            return self._knowledge_tree()
+        else:
+            return self._knowledge_stats()
+
+    def _knowledge_toggle(self, enabled: bool) -> str:
+        from config import conf
+        import json as _json
+
+        conf()["knowledge"] = enabled
+
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        config_path = os.path.join(project_root, "config.json")
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                file_config = _json.load(f)
+            file_config["knowledge"] = enabled
+            with open(config_path, "w", encoding="utf-8") as f:
+                _json.dump(file_config, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            return f"⚠️ 内存中已切换，但写入 config.json 失败: {e}"
+
+        status = "开启 ✅" if enabled else "关闭 ❌"
+        note = "知识库将在下次对话中生效" if enabled else "知识库系统已停用，不再注入提示词和索引知识文件"
+        return f"📚 知识库已{status}\n\n{note}"
+
+    def _knowledge_stats(self) -> str:
+        from config import conf
+        from common.utils import expand_path
+        knowledge_dir = os.path.join(
+            expand_path(conf().get("agent_workspace", "~/cow")),
+            "knowledge"
+        )
+        if not os.path.isdir(knowledge_dir):
+            return "📚 知识库目录不存在\n\n💡 开启知识库: /knowledge on"
+
+        enabled = conf().get("knowledge", True)
+        total_files = 0
+        total_bytes = 0
+        cat_count = {}
+
+        for root, dirs, files in os.walk(knowledge_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            rel_root = os.path.relpath(root, knowledge_dir)
+            category = rel_root.split(os.sep)[0] if rel_root != "." else "root"
+            for f in files:
+                if f.endswith(".md") and f not in ("index.md", "log.md"):
+                    total_files += 1
+                    total_bytes += os.path.getsize(os.path.join(root, f))
+                    cat_count[category] = cat_count.get(category, 0) + 1
+
+        status = "✅ 已开启" if enabled else "❌ 已关闭"
+        lines = [
+            "📚 知识库统计",
+            "",
+            f"状态: {status}",
+            f"页面: {total_files} 篇",
+            f"大小: {total_bytes / 1024:.1f} KB",
+            "",
+        ]
+        if cat_count:
+            for cat in sorted(cat_count.keys()):
+                lines.append(f"- {cat}/ ({cat_count[cat]} pages)")
+            lines.append("")
+
+        lines.append(f"路径: {knowledge_dir}")
+        lines.extend([
+            "",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 /knowledge list    查看文件树",
+            "💡 /knowledge on|off  开关知识库",
+        ])
+        return "\n".join(lines)
+
+    def _knowledge_tree(self) -> str:
+        from config import conf
+        from common.utils import expand_path
+        knowledge_dir = os.path.join(
+            expand_path(conf().get("agent_workspace", "~/cow")),
+            "knowledge"
+        )
+        if not os.path.isdir(knowledge_dir):
+            return "📚 知识库目录不存在\n\n💡 开启知识库: /knowledge on"
+
+        tree = ["knowledge/"]
+
+        subdirs = sorted([
+            d for d in os.listdir(knowledge_dir)
+            if os.path.isdir(os.path.join(knowledge_dir, d)) and not d.startswith(".")
+        ])
+
+        for i, subdir in enumerate(subdirs):
+            is_last_dir = (i == len(subdirs) - 1)
+            branch = "└── " if is_last_dir else "├── "
+            subdir_path = os.path.join(knowledge_dir, subdir)
+            md_files = sorted([
+                f for f in os.listdir(subdir_path)
+                if f.endswith(".md") and not f.startswith(".")
+            ])
+            tree.append(f"{branch}{subdir}/ ({len(md_files)})")
+
+            child_prefix = "    " if is_last_dir else "│   "
+            max_show = 12
+            for j, fname in enumerate(md_files[:max_show]):
+                is_last_file = (j == len(md_files[:max_show]) - 1) and len(md_files) <= max_show
+                fb = "└── " if is_last_file else "├── "
+                name = fname.replace(".md", "")
+                tree.append(f"{child_prefix}{fb}{name}")
+            if len(md_files) > max_show:
+                tree.append(f"{child_prefix}└── ... +{len(md_files) - max_show} more")
+
+        if not subdirs:
+            tree.append("(空)")
+
+        return "```\n" + "\n".join(tree) + "\n```"
 
     # ------------------------------------------------------------------
     # Helpers

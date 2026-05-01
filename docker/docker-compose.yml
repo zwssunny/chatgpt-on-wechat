@@ -9,7 +9,9 @@ services:
       - "9899:9899"
     environment:
       CHANNEL_TYPE: 'weixin'
-      MODEL: 'MiniMax-M2.7'
+      MODEL: 'deepseek-v4-flash'
+      DEEPSEEK_API_KEY: ''
+      DEEPSEEK_API_BASE: 'https://api.deepseek.com/v1'
       MINIMAX_API_KEY: ''
       ZHIPU_AI_API_KEY: ''
       ARK_API_KEY: ''
@@ -35,9 +37,10 @@ services:
       DINGTALK_CLIENT_SECRET: ''
       WECOM_BOT_ID: ''
       WECOM_BOT_SECRET: ''
+      WEB_PASSWORD: ''
       AGENT: 'True'
-      AGENT_MAX_CONTEXT_TOKENS: 40000
+      AGENT_MAX_CONTEXT_TOKENS: 50000
       AGENT_MAX_CONTEXT_TURNS: 20
-      AGENT_MAX_STEPS: 15
+      AGENT_MAX_STEPS: 20
     volumes:
       - ./cow:/home/agent/cow

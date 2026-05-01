@@ -6,7 +6,7 @@ description: Supported models and recommended choices for CowAgent
 CowAgent supports mainstream LLMs from domestic and international providers. Model interfaces are implemented in the project's `models/` directory.
 
 <Note>
-  For Agent mode, the following models are recommended based on quality and cost: MiniMax-M2.7, glm-5-turbo, kimi-k2.5, qwen3.6-plus, claude-sonnet-4-6, gemini-3.1-pro-preview
+  For Agent mode, the following models are recommended based on quality and cost: deepseek-v4-flash, MiniMax-M2.7, claude-sonnet-4-6, gemini-3.1-pro-preview, glm-5.1, qwen3.6-plus, kimi-k2.6
 </Note>
 
 ## Configuration
@@ -18,20 +18,11 @@ You can also use the [LinkAI](https://link-ai.tech) platform interface to flexib
 ## Supported Models
 
 <CardGroup cols={2}>
+  <Card title="DeepSeek" href="/en/models/deepseek">
+    deepseek-v4-flash, deepseek-v4-pro, and more
+  </Card>
   <Card title="MiniMax" href="/en/models/minimax">
     MiniMax-M2.7 and other series models
-  </Card>
-  <Card title="GLM (Zhipu AI)" href="/en/models/glm">
-    glm-5-turbo, glm-5 and other series models
-  </Card>
-  <Card title="Qwen (Tongyi Qianwen)" href="/en/models/qwen">
-    qwen3.6-plus, qwen3-max and more
-  </Card>
-  <Card title="Kimi" href="/en/models/kimi">
-    kimi-k2.5, kimi-k2 and more
-  </Card>
-  <Card title="Doubao (ByteDance)" href="/en/models/doubao">
-    doubao-seed series models
   </Card>
   <Card title="Claude" href="/en/models/claude">
     claude-sonnet-4-6 and more
@@ -42,8 +33,17 @@ You can also use the [LinkAI](https://link-ai.tech) platform interface to flexib
   <Card title="OpenAI" href="/en/models/openai">
     gpt-5.4, gpt-4.1, o-series and more
   </Card>
-  <Card title="DeepSeek" href="/en/models/deepseek">
-    deepseek-chat, deepseek-reasoner
+  <Card title="GLM (Zhipu AI)" href="/en/models/glm">
+    glm-5.1, glm-5-turbo, glm-5 and other series models
+  </Card>
+  <Card title="Qwen (Tongyi Qianwen)" href="/en/models/qwen">
+    qwen3.6-plus, qwen3-max and more
+  </Card>
+  <Card title="Doubao (ByteDance)" href="/en/models/doubao">
+    doubao-seed series models
+  </Card>
+  <Card title="Kimi" href="/en/models/kimi">
+    kimi-k2.6, kimi-k2.5, kimi-k2 and more
   </Card>
   <Card title="LinkAI" href="/en/models/linkai">
     Unified multi-model interface + knowledge base
@@ -51,5 +51,5 @@ You can also use the [LinkAI](https://link-ai.tech) platform interface to flexib
 </CardGroup>
 
 <Tip>
-  For a full list of model names, refer to the project's [`common/const.py`](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/common/const.py) file.
+  For a full list of model names, refer to the project's [`common/const.py`](https://github.com/zhayujie/CowAgent/blob/master/common/const.py) file.
 </Tip>

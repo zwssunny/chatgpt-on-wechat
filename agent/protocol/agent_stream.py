@@ -13,6 +13,37 @@ from agent.tools.base_tool import BaseTool, ToolResult
 from common.log import logger
 
 
+# Maximum number of characters of model "reasoning / thinking" content to persist
+# in conversation history. The full reasoning is still streamed to the UI in real
+# time (subject to its own SSE / rendering limits); this bound only controls what
+# is stored in DB and replayed in history. Long reasoning is not useful for later
+# context (the LLM never sees thinking blocks anyway) and bloats DB.
+# Keep aligned with the frontend REASONING_RENDER_CAP and the SSE
+# MAX_REASONING_STREAM_CHARS so that storage / stream / display all match.
+MAX_STORED_REASONING_CHARS = 4 * 1024  # 4 KB
+
+# Marker inserted between head and tail when reasoning is truncated.
+_REASONING_TRUNCATE_MARKER = "\n\n... [reasoning truncated, {omitted} chars omitted] ...\n\n"
+
+
+def _truncate_reasoning_for_storage(text: str) -> str:
+    """Trim long reasoning to head + tail with an omission marker.
+
+    Keeps the first and last halves of MAX_STORED_REASONING_CHARS so both the
+    initial chain-of-thought and the final conclusions are preserved for UI
+    replay, without storing the entire (often very large) middle.
+    """
+    if not text:
+        return text
+    if len(text) <= MAX_STORED_REASONING_CHARS:
+        return text
+    half = MAX_STORED_REASONING_CHARS // 2
+    head = text[:half]
+    tail = text[-half:]
+    omitted = len(text) - len(head) - len(tail)
+    return head + _REASONING_TRUNCATE_MARKER.format(omitted=omitted) + tail
+
+
 class AgentStreamExecutor:
     """
     Agent Stream Executor
@@ -78,18 +109,48 @@ class AgentStreamExecutor:
             except Exception as e:
                 logger.error(f"Event callback error: {e}")
     
+    def _is_thinking_enabled(self) -> bool:
+        """Whether deep-thinking mode is on at the model layer.
+
+        Mirrors the global toggle used by ``bridge.agent_bridge`` when deciding
+        whether to send ``thinking={"type": "enabled"}`` to the model. Used for
+        logging and reasoning-update event emission across all channels.
+        """
+        from config import conf
+        return bool(conf().get("enable_thinking", False))
+
+    def _should_render_thinking_inline(self) -> bool:
+        """Whether ``<think>...</think>`` blocks embedded directly in ``content``
+        (MiniMax, some third-party proxies) should be surfaced to the channel.
+
+        Only the Web console can render them in a collapsible panel. IM channels
+        (WeChat/WeCom/DingTalk/Feishu) must strip them, otherwise users see raw
+        XML tags in their chat.
+        """
+        from config import conf
+        channel_type = getattr(self.model, 'channel_type', '') or ''
+        return conf().get("enable_thinking", False) and channel_type == 'web'
+
     def _filter_think_tags(self, text: str) -> str:
         """
-        Remove <think> and </think> tags but keep the content inside.
-        Some LLM providers (e.g., MiniMax) may return thinking process wrapped in <think> tags.
-        We only remove the tags themselves, keeping the actual thinking content.
+        Handle <think>...</think> blocks in content returned by some LLM providers
+        (e.g., MiniMax).
+
+        - When inline thinking rendering is allowed (Web + thinking enabled):
+          remove only the tags, keep the content inside.
+        - Otherwise (IM channels, or thinking disabled globally): remove both
+          the tags and the content entirely.
         """
         if not text:
             return text
         import re
-        # Remove only the <think> and </think> tags, keep the content
-        text = re.sub(r'<think>', '', text)
-        text = re.sub(r'</think>', '', text)
+        if self._should_render_thinking_inline():
+            text = re.sub(r'<think>', '', text)
+            text = re.sub(r'</think>', '', text)
+        else:
+            text = re.sub(r'<think>[\s\S]*?</think>', '', text)
+            # Also strip unclosed <think> tag at the end (streaming partial)
+            text = re.sub(r'<think>[\s\S]*$', '', text)
         return text
 
     def _hash_args(self, args: dict) -> str:
@@ -178,7 +239,10 @@ class AgentStreamExecutor:
             Final response text
         """
         # Log user message with model info
-        logger.info(f"🤖 {self.model.model} | 👤 {user_message}")
+        
+        thinking_enabled = self._is_thinking_enabled()
+        thinking_label = " | 💭 thinking" if thinking_enabled else ""
+        logger.info(f"🤖 {self.model.model}{thinking_label} | 👤 {user_message}")        
         
         # Add user message (Claude format - use content blocks for consistency)
         self.messages.append({
@@ -227,6 +291,9 @@ class AgentStreamExecutor:
                         if turn > 1:
                             logger.info(f"[Agent] Requesting explicit response from LLM...")
                             
+                            # Remember position so we can remove the injected prompt later
+                            prompt_insert_idx = len(self.messages)
+                            
                             # 添加一条消息，明确要求回复用户
                             self.messages.append({
                                 "role": "user",
@@ -240,8 +307,24 @@ class AgentStreamExecutor:
                             assistant_msg, tool_calls = self._call_llm_stream(retry_on_empty=False)
                             final_response = assistant_msg
                             
-                            # 如果还是空，才使用 fallback
-                            if not assistant_msg and not tool_calls:
+                            # Remove the injected prompt from history so it doesn't
+                            # appear as a user message in persisted conversations.
+                            # _call_llm_stream may have appended an assistant message
+                            # after the prompt, so we locate and remove only the prompt.
+                            if (prompt_insert_idx < len(self.messages)
+                                    and self.messages[prompt_insert_idx].get("role") == "user"):
+                                self.messages.pop(prompt_insert_idx)
+                                logger.debug("[Agent] Removed injected explicit-response prompt from message history")
+                            
+                            # If LLM responded with tool_calls instead of text, fall through
+                            # to the tool execution path below (don't break the loop).
+                            if tool_calls:
+                                logger.info(
+                                    f"[Agent] LLM returned tool_calls in explicit-response retry, "
+                                    f"continuing to execute tools instead of breaking"
+                                )
+                            elif not assistant_msg:
+                                # Still empty (no text and no tool_calls): use fallback
                                 logger.warning(f"[Agent] Still empty after explicit request")
                                 final_response = (
                                     "抱歉，我暂时无法生成回复。请尝试换一种方式描述你的需求，或稍后再试。"
@@ -256,20 +339,28 @@ class AgentStreamExecutor:
                     else:
                         logger.info(f"💭 {assistant_msg[:150]}{'...' if len(assistant_msg) > 150 else ''}")
                     
-                    logger.debug(f"✅ 完成 (无工具调用)")
-                    self._emit_event("turn_end", {
-                        "turn": turn,
-                        "has_tool_calls": False
-                    })
-                    break
+                    # If the explicit-response retry produced tool_calls, skip the break
+                    # and continue down to the tool execution branch in this same iteration.
+                    if not tool_calls:
+                        logger.debug(f"✅ 完成 (无工具调用)")
+                        self._emit_event("turn_end", {
+                            "turn": turn,
+                            "has_tool_calls": False
+                        })
+                        break
 
-                # Log tool calls with arguments
+                # Log tool calls with arguments (truncate long values like base64)
                 tool_calls_str = []
                 for tc in tool_calls:
-                    # Safely handle None or missing arguments
                     args = tc.get('arguments') or {}
                     if isinstance(args, dict):
-                        args_str = ', '.join([f"{k}={v}" for k, v in args.items()])
+                        parts = []
+                        for k, v in args.items():
+                            v_str = str(v)
+                            if len(v_str) > 200:
+                                v_str = v_str[:200] + f"...({len(v_str)} chars)"
+                            parts.append(f"{k}={v_str}")
+                        args_str = ', '.join(parts)
                         if args_str:
                             tool_calls_str.append(f"{tc['name']}({args_str})")
                         else:
@@ -527,6 +618,7 @@ class AgentStreamExecutor:
 
         # Streaming response
         full_content = ""
+        full_reasoning = ""
         tool_calls_buffer = {}  # {index: {id, name, arguments}}
         gemini_raw_parts = None  # Preserve Gemini thoughtSignature for round-trip
         stop_reason = None  # Track why the stream stopped
@@ -584,10 +676,11 @@ class AgentStreamExecutor:
                     if finish_reason:
                         stop_reason = finish_reason
 
-                    # Skip reasoning_content (internal thinking from models like GLM-5)
                     reasoning_delta = delta.get("reasoning_content") or ""
-                    # if reasoning_delta:
-                    #     logger.debug(f"🧠 [thinking] {reasoning_delta[:100]}...")
+                    if reasoning_delta:
+                        full_reasoning += reasoning_delta
+                        if self._is_thinking_enabled():
+                            self._emit_event("reasoning_update", {"delta": reasoning_delta})
 
                     # Handle text content
                     content_delta = delta.get("content") or ""
@@ -621,8 +714,11 @@ class AgentStreamExecutor:
                                     tool_calls_buffer[index]["arguments"] += func["arguments"]
 
                     # Preserve _gemini_raw_parts for Gemini thoughtSignature round-trip
+                    # (direct Gemini: list of parts; LinkAI proxy: base64 string of JSON parts)
                     if "_gemini_raw_parts" in delta:
                         gemini_raw_parts = delta["_gemini_raw_parts"]
+                    elif isinstance(choice, dict) and choice.get("_gemini_raw_parts"):
+                        gemini_raw_parts = choice["_gemini_raw_parts"]
 
         except Exception as e:
             error_str = str(e)
@@ -788,7 +884,18 @@ class AgentStreamExecutor:
         # Add assistant message to history (Claude format uses content blocks)
         assistant_msg = {"role": "assistant", "content": []}
 
-        # Add text content block if present
+        if full_reasoning:
+            stored_reasoning = _truncate_reasoning_for_storage(full_reasoning)
+            if len(stored_reasoning) < len(full_reasoning):
+                logger.info(
+                    f"[reasoning] truncated for storage: "
+                    f"{len(full_reasoning)} -> {len(stored_reasoning)} chars"
+                )
+            assistant_msg["content"].append({
+                "type": "thinking",
+                "thinking": stored_reasoning
+            })
+
         if full_content:
             assistant_msg["content"].append({
                 "type": "text",
@@ -1192,6 +1299,56 @@ class AgentStreamExecutor:
         logger.warning("🔧 Aggressive trim: nothing to trim, will clear history")
         return False
 
+    def _build_context_summary_callback(self, discarded_turns: list, kept_turns: list):
+        """
+        Build a callback that injects an LLM summary into the first user
+        message of *kept_turns*. Returns None if no valid injection target.
+
+        The callback is passed to flush_from_messages so that the same LLM
+        call that writes daily memory also provides the in-context summary.
+        """
+        if not kept_turns:
+            return None
+
+        # Find the first user text block in kept_turns as injection target
+        target_block = None
+        for turn in kept_turns:
+            for msg in turn["messages"]:
+                if msg.get("role") == "user":
+                    content = msg.get("content", [])
+                    if isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                target_block = block
+                                break
+                    if target_block:
+                        break
+            if target_block:
+                break
+
+        if not target_block:
+            return None
+
+        turn_count = len(discarded_turns)
+        original_text = target_block["text"]
+
+        def _on_summary_ready(summary: str):
+            if not summary or not summary.strip():
+                return
+            target_block["text"] = (
+                f"[System: Previous conversation summary — "
+                f"{turn_count} turns were compacted]\n\n"
+                f"{summary.strip()}\n\n"
+                f"The recent conversation continues below.\n\n---\n\n"
+                f"{original_text}"
+            )
+            logger.info(
+                f"📝 Context summary injected "
+                f"({len(summary)} chars, {turn_count} turns)"
+            )
+
+        return _on_summary_ready
+
     def _trim_messages(self):
         """
         智能清理消息历史，保持对话完整性
@@ -1218,24 +1375,27 @@ class AgentStreamExecutor:
             removed_count = len(turns) // 2
             keep_count = len(turns) - removed_count
             
-            # Flush discarded turns to daily memory
-            if self.agent.memory_manager:
-                discarded_messages = []
-                for turn in turns[:removed_count]:
-                    discarded_messages.extend(turn["messages"])
-                if discarded_messages:
-                    user_id = getattr(self.agent, '_current_user_id', None)
-                    self.agent.memory_manager.flush_memory(
-                        messages=discarded_messages, user_id=user_id,
-                        reason="trim", max_messages=0
-                    )
-            
+            discarded_turns = turns[:removed_count]
             turns = turns[-keep_count:]
-            
+
             logger.info(
                 f"💾 上下文轮次超限: {keep_count + removed_count} > {self.max_context_turns}，"
                 f"裁剪至 {keep_count} 轮（移除 {removed_count} 轮）"
             )
+
+            # Flush to daily memory + inject context summary (single async LLM call)
+            if self.agent.memory_manager:
+                discarded_messages = []
+                for turn in discarded_turns:
+                    discarded_messages.extend(turn["messages"])
+                if discarded_messages:
+                    user_id = getattr(self.agent, '_current_user_id', None)
+                    cb = self._build_context_summary_callback(discarded_turns, turns)
+                    self.agent.memory_manager.flush_memory(
+                        messages=discarded_messages, user_id=user_id,
+                        reason="trim", max_messages=0,
+                        context_summary_callback=cb,
+                    )
 
         # Step 3: Token 限制 - 保留完整轮次
         # Get context window from agent (based on model)
@@ -1312,6 +1472,7 @@ class AgentStreamExecutor:
         # --- Many turns (>=5): discard the older half, keep the newer half ---
         removed_count = len(turns) // 2
         keep_count = len(turns) - removed_count
+        discarded_turns = turns[:removed_count]
         kept_turns = turns[-keep_count:]
         kept_tokens = sum(self._estimate_turn_tokens(t) for t in kept_turns)
 
@@ -1322,13 +1483,15 @@ class AgentStreamExecutor:
 
         if self.agent.memory_manager:
             discarded_messages = []
-            for turn in turns[:removed_count]:
+            for turn in discarded_turns:
                 discarded_messages.extend(turn["messages"])
             if discarded_messages:
                 user_id = getattr(self.agent, '_current_user_id', None)
+                cb = self._build_context_summary_callback(discarded_turns, kept_turns)
                 self.agent.memory_manager.flush_memory(
                     messages=discarded_messages, user_id=user_id,
-                    reason="trim", max_messages=0
+                    reason="trim", max_messages=0,
+                    context_summary_callback=cb,
                 )
 
         new_messages = []

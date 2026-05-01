@@ -1,6 +1,8 @@
 {
   "channel_type": "weixin",
-  "model": "MiniMax-M2.7",
+  "model": "deepseek-v4-flash",
+  "deepseek_api_key": "",
+  "deepseek_api_base": "https://api.deepseek.com/v1",
   "minimax_api_key": "",
   "zhipu_ai_api_key": "",
   "ark_api_key": "",
@@ -26,8 +28,11 @@
   "dingtalk_client_secret":"",
   "wecom_bot_id": "",
   "wecom_bot_secret": "",
+  "web_password": "",
   "agent": true,
-  "agent_max_context_tokens": 40000,
+  "agent_max_context_tokens": 50000,
   "agent_max_context_turns": 20,
-  "agent_max_steps": 15
+  "agent_max_steps": 20,
+  "enable_thinking": false,
+  "knowledge": true
 }

@@ -15,30 +15,48 @@ const I18N = {
         console: '控制台',
         nav_chat: '对话', nav_manage: '管理', nav_monitor: '监控',
         menu_chat: '对话', menu_config: '配置', menu_skills: '技能',
-        menu_memory: '记忆', menu_channels: '通道', menu_tasks: '定时',
+        menu_memory: '记忆', menu_knowledge: '知识', menu_channels: '通道', menu_tasks: '定时',
         menu_logs: '日志',
-        welcome_subtitle: '我可以帮你解答问题、管理计算机、创造和执行技能，并通过长期记忆<br>不断成长',
-        example_sys_title: '系统管理', example_sys_text: '帮我查看工作空间里有哪些文件',
-        example_task_title: '技能系统', example_task_text: '查看所有支持的工具和技能',
-        example_code_title: '编程助手', example_code_text: '帮我编写一个Python爬虫脚本',
+        knowledge_title: '知识库', knowledge_desc: '浏览和探索你的知识库',
+        knowledge_tab_docs: '文档', knowledge_tab_graph: '图谱',
+        knowledge_loading: '加载知识库中...', knowledge_loading_desc: '知识页面将显示在这里',
+        knowledge_select_hint: '选择一个文档查看', knowledge_empty_hint: '暂无知识页面',
+        knowledge_empty_guide: '在对话中发送文档、链接或主题给 Agent，它会自动整理到你的知识库中。',
+        knowledge_go_chat: '开始对话',
+        welcome_subtitle: '我可以帮你解答问题、管理计算机、创造和执行技能，并通过<br>长期记忆和知识库不断成长',
+        example_sys_title: '系统管理', example_sys_text: '查看工作空间里有哪些文件',
+        example_task_title: '定时任务', example_task_text: '1分钟后提醒我检查服务器',
+        example_code_title: '编程助手', example_code_text: '搜索AI资讯并生成可视化网页报告',
+        example_knowledge_title: '知识库', example_knowledge_text: '查看知识库当前文档情况',
+        example_skill_title: '技能系统', example_skill_text: '查看所有支持的工具和技能',
+        example_web_title: '指令中心', example_web_text: '查看全部命令',
         input_placeholder: '输入消息，或输入 / 使用指令',
         config_title: '配置管理', config_desc: '管理模型和 Agent 配置',
         config_model: '模型配置', config_agent: 'Agent 配置',
         config_channel: '通道配置',
-        config_agent_enabled: 'Agent 模式', config_max_tokens: '最大 Token',
-        config_max_turns: '最大轮次', config_max_steps: '最大步数',
+        config_agent_enabled: 'Agent 模式',
+        config_max_tokens: '最大上下文 Token', config_max_tokens_hint: '对话中 Agent 能输入的最大 Token 长度，超过后会智能压缩处理',
+        config_max_turns: '最大记忆轮次', config_max_turns_hint: '一问一答为一轮，超过后会智能压缩处理',
+        config_max_steps: '最大执行步数', config_max_steps_hint: '单次对话中 Agent 最多调用工具的次数',
+        config_enable_thinking: '深度思考', config_enable_thinking_hint: '是否启用深度思考模式',
         config_channel_type: '通道类型',
         config_provider: '模型厂商', config_model_name: '模型',
         config_custom_model_hint: '输入自定义模型名称',
         config_save: '保存', config_saved: '已保存',
         config_save_error: '保存失败',
         config_custom_option: '自定义...',
+        config_custom_tip: '接口需遵循 OpenAI API 协议',
+        config_security: '安全设置', config_password: '访问密码',
+        config_password_hint: '留空则不启用密码保护',
+        config_password_changed: '密码已更新，请重新登录',
+        config_password_cleared: '密码已清除',
         skills_title: '技能管理', skills_desc: '查看、启用或禁用 Agent 技能', skills_hub_btn: '探索技能广场',
         skills_loading: '加载技能中...', skills_loading_desc: '技能加载后将显示在此处',
         tools_section_title: '内置工具', tools_loading: '加载工具中...',
         skills_section_title: '技能', skill_enable: '启用', skill_disable: '禁用',
         skill_toggle_error: '操作失败，请稍后再试',
         memory_title: '记忆管理', memory_desc: '查看 Agent 记忆文件和内容',
+        memory_tab_files: '记忆文件', memory_tab_dreams: '梦境日记',
         memory_loading: '加载记忆文件中...', memory_loading_desc: '记忆文件将显示在此处',
         memory_back: '返回列表',
         memory_col_name: '文件名', memory_col_type: '类型', memory_col_size: '大小', memory_col_updated: '更新时间',
@@ -64,36 +82,67 @@ const I18N = {
         tasks_coming: '即将推出', tasks_coming_desc: '定时任务管理功能即将在此提供',
         logs_title: '日志', logs_desc: '实时日志输出 (run.log)',
         logs_live: '实时', logs_coming_msg: '日志流即将在此提供。将连接 run.log 实现类似 tail -f 的实时输出。',
+        new_chat: '新对话',
+        session_history: '历史会话',
+        today: '今天', yesterday: '昨天', earlier: '更早',
+        delete_session_confirm: '确认删除该会话？所有消息将被清除。',
+        delete_session_title: '删除会话',
+        untitled_session: '新对话',
+        context_cleared: '— 以上内容已从上下文中移除 —',
+        tip_new_chat: '新建对话',
+        tip_clear_context: '清除上下文',
+        tip_attach_file: '上传附件',
+        confirm_yes: '确认',
+        confirm_cancel: '取消',
         error_send: '发送失败，请稍后再试。', error_timeout: '请求超时，请再试一次。',
+        thinking_in_progress: '思考中...', thinking_done: '已深度思考', thinking_duration: '耗时',
     },
     en: {
         console: 'Console',
         nav_chat: 'Chat', nav_manage: 'Management', nav_monitor: 'Monitor',
         menu_chat: 'Chat', menu_config: 'Config', menu_skills: 'Skills',
-        menu_memory: 'Memory', menu_channels: 'Channels', menu_tasks: 'Tasks',
+        menu_memory: 'Memory', menu_knowledge: 'Knowledge', menu_channels: 'Channels', menu_tasks: 'Tasks',
         menu_logs: 'Logs',
-        welcome_subtitle: 'I can help you answer questions, manage your computer, create and execute skills, and keep growing through <br> long-term memory.',
+        knowledge_title: 'Knowledge', knowledge_desc: 'Browse and explore your knowledge base',
+        knowledge_tab_docs: 'Documents', knowledge_tab_graph: 'Graph',
+        knowledge_loading: 'Loading knowledge base...', knowledge_loading_desc: 'Knowledge pages will be displayed here',
+        knowledge_select_hint: 'Select a document to view', knowledge_empty_hint: 'No knowledge pages yet',
+        knowledge_empty_guide: 'Send documents, links or topics to the agent in chat, and it will automatically organize them into your knowledge base.',
+        knowledge_go_chat: 'Start a conversation',
+        welcome_subtitle: 'I can help you answer questions, manage your computer, create and execute skills, and keep growing through <br> long-term memory and a personal knowledge base.',
         example_sys_title: 'System', example_sys_text: 'Show me the files in the workspace',
-        example_task_title: 'Skills', example_task_text: 'Show current tools and skills',
-        example_code_title: 'Coding', example_code_text: 'Write a Python web scraper script',
+        example_task_title: 'Scheduler', example_task_text: 'Remind me to check the server in 5 minutes',
+        example_code_title: 'Coding', example_code_text: 'Search today\'s AI news and generate a visual report webpage',
+        example_knowledge_title: 'Knowledge', example_knowledge_text: 'Show me the current knowledge base',
+        example_skill_title: 'Skills', example_skill_text: 'Show current tools and skills',
+        example_web_title: 'Commands', example_web_text: 'Show all commands',
         input_placeholder: 'Type a message, or press / for commands',
         config_title: 'Configuration', config_desc: 'Manage model and agent settings',
         config_model: 'Model Configuration', config_agent: 'Agent Configuration',
         config_channel: 'Channel Configuration',
-        config_agent_enabled: 'Agent Mode', config_max_tokens: 'Max Tokens',
-        config_max_turns: 'Max Turns', config_max_steps: 'Max Steps',
+        config_agent_enabled: 'Agent Mode',
+        config_max_tokens: 'Max Context Tokens', config_max_tokens_hint: 'Max tokens the Agent can input per conversation, auto-compressed when exceeded',
+        config_max_turns: 'Max Memory Turns', config_max_turns_hint: 'One Q&A pair = one turn, auto-compressed when exceeded',
+        config_max_steps: 'Max Steps', config_max_steps_hint: 'Max tool calls the Agent can make in a single conversation',
+        config_enable_thinking: 'Deep Thinking', config_enable_thinking_hint: 'Enable deep thinking mode',
         config_channel_type: 'Channel Type',
         config_provider: 'Provider', config_model_name: 'Model',
         config_custom_model_hint: 'Enter custom model name',
         config_save: 'Save', config_saved: 'Saved',
         config_save_error: 'Save failed',
         config_custom_option: 'Custom...',
+        config_custom_tip: 'API must follow OpenAI protocol.',
+        config_security: 'Security', config_password: 'Password',
+        config_password_hint: 'Leave empty to disable password protection',
+        config_password_changed: 'Password updated, please re-login',
+        config_password_cleared: 'Password cleared',
         skills_title: 'Skills', skills_desc: 'View, enable, or disable agent skills', skills_hub_btn: 'Skill Hub',
         skills_loading: 'Loading skills...', skills_loading_desc: 'Skills will be displayed here after loading',
         tools_section_title: 'Built-in Tools', tools_loading: 'Loading tools...',
         skills_section_title: 'Skills', skill_enable: 'Enable', skill_disable: 'Disable',
         skill_toggle_error: 'Operation failed, please try again',
         memory_title: 'Memory', memory_desc: 'View agent memory files and contents',
+        memory_tab_files: 'Memory Files', memory_tab_dreams: 'Dream Diary',
         memory_loading: 'Loading memory files...', memory_loading_desc: 'Memory files will be displayed here',
         memory_back: 'Back to list',
         memory_col_name: 'Filename', memory_col_type: 'Type', memory_col_size: 'Size', memory_col_updated: 'Updated',
@@ -119,7 +168,20 @@ const I18N = {
         tasks_coming: 'Coming Soon', tasks_coming_desc: 'Scheduled task management will be available here',
         logs_title: 'Logs', logs_desc: 'Real-time log output (run.log)',
         logs_live: 'Live', logs_coming_msg: 'Log streaming will be available here. Connects to run.log for real-time output similar to tail -f.',
+        new_chat: 'New Chat',
+        session_history: 'History',
+        today: 'Today', yesterday: 'Yesterday', earlier: 'Earlier',
+        delete_session_confirm: 'Delete this session? All messages will be removed.',
+        delete_session_title: 'Delete Session',
+        untitled_session: 'New Chat',
+        context_cleared: '— Context above has been cleared —',
+        tip_new_chat: 'New Chat',
+        tip_clear_context: 'Clear Context',
+        tip_attach_file: 'Attach File',
+        confirm_yes: 'Confirm',
+        confirm_cancel: 'Cancel',
         error_send: 'Failed to send. Please try again.', error_timeout: 'Request timeout. Please try again.',
+        thinking_in_progress: 'Thinking...', thinking_done: 'Thought', thinking_duration: 'Duration',
     }
 };
 
@@ -139,13 +201,67 @@ function applyI18n() {
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         el.placeholder = t(el.dataset['i18nPlaceholder']);
     });
-    document.getElementById('lang-label').textContent = currentLang === 'zh' ? 'EN' : '中文';
+    document.querySelectorAll('[data-tip-key]').forEach(el => {
+        el.setAttribute('data-tooltip', t(el.dataset.tipKey));
+    });
+    installCfgTipPortal();
+    const langLabel = document.getElementById('lang-label');
+    if (langLabel) langLabel.textContent = currentLang === 'zh' ? '中文' : 'EN';
 }
 
 function toggleLanguage() {
     currentLang = currentLang === 'zh' ? 'en' : 'zh';
     localStorage.setItem('cow_lang', currentLang);
     applyI18n();
+    _applyInputTooltips();
+}
+
+// Floating tooltip portal for [data-tip-key] elements. Tooltip nodes are
+// appended to <body> so they aren't clipped by overflow:hidden ancestors
+// (e.g. the config panel's scroll container).
+let _cfgTipPortalEl = null;
+let _cfgTipPortalInstalled = false;
+function installCfgTipPortal() {
+    if (_cfgTipPortalInstalled) return;
+    _cfgTipPortalInstalled = true;
+
+    const showTip = (target) => {
+        const text = target.getAttribute('data-tooltip');
+        if (!text) return;
+        if (!_cfgTipPortalEl) {
+            _cfgTipPortalEl = document.createElement('div');
+            _cfgTipPortalEl.className = 'cfg-tip-floating';
+            document.body.appendChild(_cfgTipPortalEl);
+        }
+        _cfgTipPortalEl.textContent = text;
+        const rect = target.getBoundingClientRect();
+        // Render once to measure, then position above the target, centered.
+        _cfgTipPortalEl.style.left = '0px';
+        _cfgTipPortalEl.style.top = '0px';
+        _cfgTipPortalEl.classList.add('show');
+        const tipRect = _cfgTipPortalEl.getBoundingClientRect();
+        let left = rect.left + rect.width / 2 - tipRect.width / 2;
+        // Clamp horizontally to the viewport with an 8px gutter.
+        left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+        const top = rect.top - tipRect.height - 6;
+        _cfgTipPortalEl.style.left = left + 'px';
+        _cfgTipPortalEl.style.top = top + 'px';
+    };
+    const hideTip = () => {
+        if (_cfgTipPortalEl) _cfgTipPortalEl.classList.remove('show');
+    };
+
+    document.addEventListener('mouseover', (e) => {
+        const target = e.target.closest('[data-tip-key]');
+        if (target) showTip(target);
+    });
+    document.addEventListener('mouseout', (e) => {
+        const target = e.target.closest('[data-tip-key]');
+        if (target) hideTip();
+    });
+    // Hide on scroll/resize so the tooltip doesn't drift away from its anchor.
+    window.addEventListener('scroll', hideTip, true);
+    window.addEventListener('resize', hideTip);
 }
 
 // =====================================================================
@@ -182,6 +298,7 @@ const VIEW_META = {
     config:   { group: 'nav_manage',  page: 'menu_config' },
     skills:   { group: 'nav_manage',  page: 'menu_skills' },
     memory:   { group: 'nav_manage',  page: 'menu_memory' },
+    knowledge:{ group: 'nav_manage',  page: 'menu_knowledge' },
     channels: { group: 'nav_manage',  page: 'menu_channels' },
     tasks:    { group: 'nav_manage',  page: 'menu_tasks' },
     logs:     { group: 'nav_monitor', page: 'menu_logs' },
@@ -271,16 +388,57 @@ function createMd() {
 const md = createMd();
 
 const VIDEO_EXT_RE = /\.(?:mp4|webm|mov|avi|mkv)$/i;  // tested against URL without query string
+const IMAGE_EXT_RE = /\.(?:jpg|jpeg|png|gif|webp|bmp|svg)$/i;  // tested against URL without query string
+
+function _toWebUrl(url) {
+    if (/^\/[A-Za-z]/.test(url) && !url.startsWith('/api/')) {
+        return '/api/file?path=' + encodeURIComponent(url);
+    }
+    if (/^file:\/\/\//i.test(url)) {
+        return '/api/file?path=' + encodeURIComponent(url.replace(/^file:\/\/\//i, '/'));
+    }
+    return url;
+}
 
 function _buildVideoHtml(url) {
+    const webUrl = _toWebUrl(url);
     const fileName = url.split('/').pop().split('?')[0];
     return `<div style="margin:10px 0;">` +
         `<video controls preload="metadata" ` +
         `style="max-width:100%;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.15);display:block;">` +
-        `<source src="${url}"></video>` +
-        `<a href="${url}" target="_blank" ` +
+        `<source src="${webUrl}"></video>` +
+        `<a href="${webUrl}" target="_blank" ` +
         `style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;color:#8b8fa8;text-decoration:none;">` +
         `<i class="fas fa-download"></i> ${escapeHtml(fileName)}</a></div>`;
+}
+
+function _openImageLightbox(src) {
+    let overlay = document.getElementById('cow-lightbox');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'cow-lightbox';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;opacity:0;transition:opacity .2s';
+        overlay.onclick = () => { overlay.style.opacity = '0'; setTimeout(() => overlay.style.display = 'none', 200); };
+        const img = document.createElement('img');
+        img.id = 'cow-lightbox-img';
+        img.style.cssText = 'max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.5);object-fit:contain;';
+        img.onclick = (e) => e.stopPropagation();
+        overlay.appendChild(img);
+        document.body.appendChild(overlay);
+    }
+    overlay.querySelector('#cow-lightbox-img').src = src;
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => overlay.style.opacity = '1');
+}
+
+function _buildImageHtml(url) {
+    const webUrl = _toWebUrl(url);
+    const safeUrl = webUrl.replace(/"/g, '&quot;');
+    return `<div style="margin:10px 0;">` +
+        `<img src="${safeUrl}" alt="image" loading="lazy" ` +
+        `onclick="_openImageLightbox(this.src)" ` +
+        `style="max-width:520px;width:100%;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.15);display:block;cursor:zoom-in;">` +
+        `</div>`;
 }
 
 function injectVideoPlayers(html) {
@@ -301,10 +459,43 @@ function injectVideoPlayers(html) {
     }).join('');
 }
 
+// Convert image URLs into inline <img> previews. Mirrors injectVideoPlayers but for images.
+// Handles three cases produced by markdown-it:
+//   1. <a href="...image.jpg">...</a>  (bare URL or autolink that linkify turned into an anchor)
+//   2. <img src="...">                  (markdown image syntax) — leave as-is, but normalize style
+//   3. raw URL still present in a text node                    — only as a safety net
+function injectImagePreviews(html) {
+    // Step 1: anchor whose href points to an image file -> replace with <img> preview.
+    const step1 = html.replace(
+        /<a\s+href="(https?:\/\/[^"]+)"[^>]*>[^<]*<\/a>/gi,
+        (match, url) => IMAGE_EXT_RE.test(url.split('?')[0]) ? _buildImageHtml(url) : match
+    );
+    // Step 2: bare image URLs left in text nodes (rare — markdown-it's linkify usually catches them).
+    return step1.split(/(<[^>]+>)/).map((chunk, idx) => {
+        if (idx % 2 !== 0) return chunk;
+        return chunk.replace(/https?:\/\/\S+/gi, (url) => {
+            const bare = url.replace(/[),.\s]+$/, '');
+            return IMAGE_EXT_RE.test(bare.split('?')[0]) ? _buildImageHtml(bare) : url;
+        });
+    }).join('');
+}
+
+function _rewriteLocalImgSrc(html) {
+    return html.replace(/<img\s([^>]*?)src="([^"]+)"([^>]*?)>/gi, (match, pre, src, post) => {
+        const webSrc = _toWebUrl(src);
+        const safeSrc = webSrc.replace(/"/g, '&quot;');
+        const hasClick = /onclick/i.test(pre + post);
+        const clickAttr = hasClick ? '' : ` onclick="_openImageLightbox(this.src)" style="cursor:zoom-in;"`;
+        return `<img ${pre}src="${safeSrc}"${post}${clickAttr}>`;
+    });
+}
+
 function renderMarkdown(text) {
     try {
-        const html = md.render(text);
-        return injectVideoPlayers(html);
+        let html = md.render(text);
+        html = _rewriteLocalImgSrc(html);
+        // Order matters: video first (more specific), then image.
+        return injectImagePreviews(injectVideoPlayers(html));
     }
     catch (e) { return text.replace(/\n/g, '<br>'); }
 }
@@ -313,6 +504,7 @@ function renderMarkdown(text) {
 // Chat Module
 // =====================================================================
 let isPolling = false;
+let pollGeneration = 0;   // incremented on each restart to cancel stale poll loops
 let loadingContainers = {};
 let activeStreams = {};   // request_id -> EventSource
 let isComposing = false;
@@ -353,10 +545,53 @@ fetch('/config').then(r => r.json()).then(data => {
     loadHistory(1);
 }).catch(() => { loadHistory(1); });
 
+// Start polling immediately so scheduler/push messages are received at any time
+startPolling();
+
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const messagesDiv = document.getElementById('chat-messages');
 const fileInput = document.getElementById('file-input');
+
+// Smart auto-scroll: pause when user scrolls up, resume when near bottom
+let _autoScrollEnabled = true;
+const _SCROLL_THRESHOLD = 80; // px from bottom to re-enable auto-scroll
+
+messagesDiv.addEventListener('scroll', () => {
+    const distFromBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
+    _autoScrollEnabled = distFromBottom <= _SCROLL_THRESHOLD;
+    _updateScrollToBottomBtn();
+});
+
+// Intercept internal navigation links in chat messages
+messagesDiv.addEventListener('click', (e) => {
+    const copyBtn = e.target.closest('.copy-msg-btn');
+    if (copyBtn) {
+        e.preventDefault();
+        const msgRoot = copyBtn.closest('.flex.gap-3');
+        const answerEl = msgRoot && msgRoot.querySelector('.answer-content');
+        const rawMd = answerEl && answerEl.dataset.rawMd;
+        if (rawMd) {
+            navigator.clipboard.writeText(rawMd).then(() => {
+                const icon = copyBtn.querySelector('i');
+                if (icon) { icon.className = 'fas fa-check'; setTimeout(() => { icon.className = 'fas fa-copy'; }, 1500); }
+            });
+        }
+        return;
+    }
+    const a = e.target.closest('a');
+    if (!a) return;
+    const href = a.getAttribute('href') || '';
+    if (href === '/memory/dreams') {
+        e.preventDefault();
+        navigateTo('memory');
+        setTimeout(() => switchMemoryTab('dreams'), 50);
+    } else if (href === '/memory/MEMORY.md') {
+        e.preventDefault();
+        navigateTo('memory');
+        setTimeout(() => { switchMemoryTab('files'); openMemoryFile('MEMORY.md', 'memory'); }, 50);
+    }
+});
 const attachmentPreview = document.getElementById('attachment-preview');
 
 // Pending attachments: [{file_path, file_name, file_type, preview_url}]
@@ -496,6 +731,11 @@ const SLASH_COMMANDS = [
     { cmd: '/skill info ',         desc: '查看技能详情' },
     { cmd: '/skill enable ',       desc: '启用技能' },
     { cmd: '/skill disable ',      desc: '禁用技能' },
+    { cmd: '/memory dream ',        desc: '手动触发记忆蒸馏 (可指定天数, 默认3)' },
+    { cmd: '/knowledge',            desc: '查看知识库统计' },
+    { cmd: '/knowledge list',      desc: '查看知识库文件树' },
+    { cmd: '/knowledge on',        desc: '开启知识库' },
+    { cmd: '/knowledge off',       desc: '关闭知识库' },
     { cmd: '/config',              desc: '查看当前配置' },
     { cmd: '/logs',                desc: '查看最近日志' },
     { cmd: '/version',             desc: '查看版本' },
@@ -719,6 +959,14 @@ chatInput.addEventListener('blur', () => {
 
 document.querySelectorAll('.example-card').forEach(card => {
     card.addEventListener('click', () => {
+        // data-send overrides the visible text (e.g. show "查看全部命令" but send "/help")
+        const sendText = card.dataset.send;
+        if (sendText) {
+            chatInput.value = sendText;
+            chatInput.dispatchEvent(new Event('input'));
+            chatInput.focus();
+            return;
+        }
         const textEl = card.querySelector('[data-i18n*="text"]');
         if (textEl) {
             chatInput.value = textEl.textContent;
@@ -739,7 +987,10 @@ function sendMessage() {
     }
 
     const ws = document.getElementById('welcome-screen');
+    const isFirstMessage = !!ws;
     if (ws) ws.remove();
+
+    const titleInfo = (isFirstMessage && text) ? { sid: sessionId, userMsg: text } : null;
 
     const timestamp = new Date();
     const attachments = [...pendingAttachments];
@@ -763,41 +1014,62 @@ function sendMessage() {
         }));
     }
 
-    fetch('/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.status === 'success') {
-            if (data.stream) {
-                startSSE(data.request_id, loadingEl, timestamp);
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY_MS = 1000;
+
+    function postWithRetry(attempt) {
+        fetch('/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                if (data.stream) {
+                    startSSE(data.request_id, loadingEl, timestamp, titleInfo);
+                } else {
+                    loadingContainers[data.request_id] = loadingEl;
+                }
             } else {
-                loadingContainers[data.request_id] = loadingEl;
-                if (!isPolling) startPolling();
+                loadingEl.remove();
+                addBotMessage(t('error_send'), new Date());
             }
-        } else {
+        })
+        .catch(err => {
+            if (err.name === 'AbortError') {
+                loadingEl.remove();
+                addBotMessage(t('error_timeout'), new Date());
+                return;
+            }
+            if (attempt < MAX_RETRIES) {
+                console.warn(`[sendMessage] attempt ${attempt + 1} failed, retrying...`, err);
+                setTimeout(() => postWithRetry(attempt + 1), RETRY_DELAY_MS * (attempt + 1));
+                return;
+            }
             loadingEl.remove();
             addBotMessage(t('error_send'), new Date());
-        }
-    })
-    .catch(err => {
-        loadingEl.remove();
-        addBotMessage(err.name === 'AbortError' ? t('error_timeout') : t('error_send'), new Date());
-    });
+        });
+    }
+
+    postWithRetry(0);
 }
 
-function startSSE(requestId, loadingEl, timestamp) {
-    const es = new EventSource(`/stream?request_id=${encodeURIComponent(requestId)}`);
-    activeStreams[requestId] = es;
-
+function startSSE(requestId, loadingEl, timestamp, titleInfo) {
     let botEl = null;
     let stepsEl = null;    // .agent-steps  (thinking summaries + tool indicators)
     let contentEl = null;  // .answer-content (final streaming answer)
     let mediaEl = null;    // .media-content (images & file attachments)
     let accumulatedText = '';
     let currentToolEl = null;
+    let currentReasoningEl = null;  // live reasoning bubble
+    let reasoningText = '';
+    let reasoningStartTime = 0;
+    let done = false;
+
+    const MAX_RECONNECTS = 10;
+    const RECONNECT_BASE_MS = 1000;
+    let reconnectCount = 0;
 
     function ensureBotEl() {
         if (botEl) return;
@@ -813,7 +1085,12 @@ function startSSE(requestId, loadingEl, timestamp) {
                     <div class="answer-content sse-streaming"></div>
                     <div class="media-content"></div>
                 </div>
-                <div class="text-xs text-slate-400 dark:text-slate-500 mt-1.5">${formatTime(timestamp)}</div>
+                <div class="flex items-center gap-2 mt-1.5">
+                    <span class="text-xs text-slate-400 dark:text-slate-500">${formatTime(timestamp)}</span>
+                    <button class="copy-msg-btn text-xs text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 transition-colors cursor-pointer" title="${currentLang === 'zh' ? '复制' : 'Copy'}" style="display:none">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
             </div>
         `;
         messagesDiv.appendChild(botEl);
@@ -822,190 +1099,291 @@ function startSSE(requestId, loadingEl, timestamp) {
         mediaEl = botEl.querySelector('.media-content');
     }
 
-    es.onmessage = function(e) {
-        let item;
-        try { item = JSON.parse(e.data); } catch (_) { return; }
+    function connect() {
+        const es = new EventSource(`/stream?request_id=${encodeURIComponent(requestId)}`);
+        activeStreams[requestId] = es;
 
-        if (item.type === 'delta') {
-            ensureBotEl();
-            accumulatedText += item.content;
-            contentEl.innerHTML = renderMarkdown(accumulatedText);
-            scrollChatToBottom();
+        es.onmessage = function(e) {
+            let item;
+            try { item = JSON.parse(e.data); } catch (_) { return; }
 
-        } else if (item.type === 'tool_start') {
-            ensureBotEl();
+            // Successful data received, reset reconnect counter
+            reconnectCount = 0;
 
-            // Save current thinking as a collapsible step
-            if (accumulatedText.trim()) {
-                const fullText = accumulatedText.trim();
-                const oneLine = fullText.replace(/\n+/g, ' ');
-                const needsTruncate = oneLine.length > 80;
-                const stepEl = document.createElement('div');
-                stepEl.className = 'agent-step agent-thinking-step' + (needsTruncate ? '' : ' no-expand');
-                if (needsTruncate) {
-                    const truncated = oneLine.substring(0, 80) + '…';
-                    stepEl.innerHTML = `
+            if (item.type === 'reasoning') {
+                ensureBotEl();
+                reasoningText += item.content;
+                if (!currentReasoningEl) {
+                    reasoningStartTime = Date.now();
+                    currentReasoningEl = document.createElement('div');
+                    currentReasoningEl.className = 'agent-step agent-thinking-step';
+                    // During streaming, use a <pre> with a single text node and
+                    // append-only updates. This avoids re-parsing markdown and
+                    // re-setting innerHTML on every chunk, which is what causes
+                    // the page to crash on long chains-of-thought.
+                    currentReasoningEl.innerHTML = `
                         <div class="thinking-header" onclick="this.parentElement.classList.toggle('expanded')">
                             <i class="fas fa-lightbulb text-amber-400 flex-shrink-0"></i>
-                            <span class="thinking-summary">${escapeHtml(truncated)}</span>
+                            <span class="thinking-summary">${t('thinking_in_progress')}</span>
                             <i class="fas fa-chevron-right thinking-chevron"></i>
                         </div>
-                        <div class="thinking-full">${renderMarkdown(fullText)}</div>`;
-                } else {
-                    stepEl.innerHTML = `
-                        <div class="thinking-header no-toggle">
-                            <i class="fas fa-lightbulb text-amber-400 flex-shrink-0"></i>
-                            <span>${escapeHtml(oneLine)}</span>
-                        </div>`;
+                        <div class="thinking-full"><pre class="thinking-stream-pre"></pre></div>`;
+                    stepsEl.appendChild(currentReasoningEl);
+                    const preEl = currentReasoningEl.querySelector('.thinking-stream-pre');
+                    preEl.appendChild(document.createTextNode(''));
+                    currentReasoningEl._streamTextNode = preEl.firstChild;
+                    currentReasoningEl._streamPendingText = '';
+                    currentReasoningEl._streamRafScheduled = false;
+                    currentReasoningEl._streamCharsRendered = 0;
+                    currentReasoningEl._streamCapped = false;
                 }
-                stepsEl.appendChild(stepEl);
-            }
-            accumulatedText = '';
-            contentEl.innerHTML = '';
+                // Hard cap: once REASONING_RENDER_CAP chars are in the DOM, stop
+                // appending further deltas. The full text is still kept in
+                // `reasoningText` for finalize-time head+tail rendering.
+                if (!currentReasoningEl._streamCapped) {
+                    currentReasoningEl._streamPendingText += item.content;
+                    if (!currentReasoningEl._streamRafScheduled) {
+                        currentReasoningEl._streamRafScheduled = true;
+                        const elRef = currentReasoningEl;
+                        requestAnimationFrame(() => {
+                            elRef._streamRafScheduled = false;
+                            if (!elRef.isConnected || !elRef._streamTextNode) return;
+                            let pending = elRef._streamPendingText;
+                            elRef._streamPendingText = '';
+                            if (!pending) return;
+                            const remaining = REASONING_RENDER_CAP - elRef._streamCharsRendered;
+                            if (remaining <= 0) {
+                                elRef._streamCapped = true;
+                            } else {
+                                if (pending.length > remaining) {
+                                    pending = pending.slice(0, remaining);
+                                    elRef._streamCapped = true;
+                                }
+                                elRef._streamTextNode.appendData(pending);
+                                elRef._streamCharsRendered += pending.length;
+                                if (elRef._streamCapped) {
+                                    elRef._streamTextNode.appendData(
+                                        '\n\n... [reasoning truncated for display] ...'
+                                    );
+                                }
+                            }
+                            scrollChatToBottom();
+                        });
+                    }
+                }
 
-            // Add tool execution indicator (collapsible)
-            currentToolEl = document.createElement('div');
-            currentToolEl.className = 'agent-step agent-tool-step';
-            const argsStr = formatToolArgs(item.arguments || {});
-            currentToolEl.innerHTML = `
-                <div class="tool-header" onclick="this.parentElement.classList.toggle('expanded')">
-                    <i class="fas fa-cog fa-spin text-primary-400 flex-shrink-0 tool-icon"></i>
-                    <span class="tool-name">${item.tool}</span>
-                    <i class="fas fa-chevron-right tool-chevron"></i>
-                </div>
-                <div class="tool-detail">
-                    <div class="tool-detail-section">
-                        <div class="tool-detail-label">Input</div>
-                        <pre class="tool-detail-content">${argsStr}</pre>
+            } else if (item.type === 'delta') {
+                ensureBotEl();
+                if (currentReasoningEl) {
+                    finalizeThinking(currentReasoningEl, reasoningStartTime, reasoningText);
+                    currentReasoningEl = null;
+                    reasoningText = '';
+                }
+                accumulatedText += item.content;
+                contentEl.innerHTML = renderMarkdown(accumulatedText);
+                scrollChatToBottom();
+
+            } else if (item.type === 'message_end') {
+                if (item.has_tool_calls && accumulatedText.trim()) {
+                    ensureBotEl();
+                    const frozenEl = document.createElement('div');
+                    frozenEl.className = 'agent-step agent-content-step';
+                    frozenEl.innerHTML = `<div class="agent-content-body">${renderMarkdown(accumulatedText.trim())}</div>`;
+                    stepsEl.appendChild(frozenEl);
+                    accumulatedText = '';
+                    contentEl.innerHTML = '';
+                    scrollChatToBottom();
+                }
+
+            } else if (item.type === 'tool_start') {
+                ensureBotEl();
+                if (currentReasoningEl) {
+                    finalizeThinking(currentReasoningEl, reasoningStartTime, reasoningText);
+                    currentReasoningEl = null;
+                    reasoningText = '';
+                }
+                accumulatedText = '';
+                contentEl.innerHTML = '';
+
+                // Add tool execution indicator (collapsible)
+                currentToolEl = document.createElement('div');
+                currentToolEl.className = 'agent-step agent-tool-step';
+                const argsStr = formatToolArgs(item.arguments || {});
+                currentToolEl.innerHTML = `
+                    <div class="tool-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <i class="fas fa-cog fa-spin text-primary-400 flex-shrink-0 tool-icon"></i>
+                        <span class="tool-name">${item.tool}</span>
+                        <i class="fas fa-chevron-right tool-chevron"></i>
                     </div>
-                    <div class="tool-detail-section tool-output-section"></div>
-                </div>`;
-            stepsEl.appendChild(currentToolEl);
+                    <div class="tool-detail">
+                        <div class="tool-detail-section">
+                            <div class="tool-detail-label">Input</div>
+                            <pre class="tool-detail-content">${argsStr}</pre>
+                        </div>
+                        <div class="tool-detail-section tool-output-section"></div>
+                    </div>`;
+                stepsEl.appendChild(currentToolEl);
 
-            scrollChatToBottom();
+                scrollChatToBottom();
 
-        } else if (item.type === 'tool_end') {
-            if (currentToolEl) {
-                const isError = item.status !== 'success';
-                const icon = currentToolEl.querySelector('.tool-icon');
-                icon.className = isError
-                    ? 'fas fa-times text-red-400 flex-shrink-0 tool-icon'
-                    : 'fas fa-check text-primary-400 flex-shrink-0 tool-icon';
+            } else if (item.type === 'tool_end') {
+                if (currentToolEl) {
+                    const isError = item.status !== 'success';
+                    const icon = currentToolEl.querySelector('.tool-icon');
+                    icon.className = isError
+                        ? 'fas fa-times text-red-400 flex-shrink-0 tool-icon'
+                        : 'fas fa-check text-primary-400 flex-shrink-0 tool-icon';
 
-                // Show execution time
-                const nameEl = currentToolEl.querySelector('.tool-name');
-                if (item.execution_time !== undefined) {
-                    nameEl.innerHTML += ` <span class="tool-time">${item.execution_time}s</span>`;
+                    // Show execution time
+                    const nameEl = currentToolEl.querySelector('.tool-name');
+                    if (item.execution_time !== undefined) {
+                        nameEl.innerHTML += ` <span class="tool-time">${item.execution_time}s</span>`;
+                    }
+
+                    // Fill output section
+                    const outputSection = currentToolEl.querySelector('.tool-output-section');
+                    if (outputSection && item.result) {
+                        outputSection.innerHTML = `
+                            <div class="tool-detail-label">${isError ? 'Error' : 'Output'}</div>
+                            <pre class="tool-detail-content ${isError ? 'tool-error-text' : ''}">${escapeHtml(String(item.result))}</pre>`;
+                    }
+
+                    if (isError) currentToolEl.classList.add('tool-failed');
+                    currentToolEl = null;
                 }
 
-                // Fill output section
-                const outputSection = currentToolEl.querySelector('.tool-output-section');
-                if (outputSection && item.result) {
-                    outputSection.innerHTML = `
-                        <div class="tool-detail-label">${isError ? 'Error' : 'Output'}</div>
-                        <pre class="tool-detail-content ${isError ? 'tool-error-text' : ''}">${escapeHtml(String(item.result))}</pre>`;
-                }
+            } else if (item.type === 'image') {
+                ensureBotEl();
+                const imgEl = document.createElement('img');
+                imgEl.src = item.content;
+                imgEl.alt = 'screenshot';
+                imgEl.style.cssText = 'max-width:600px;border-radius:8px;margin:8px 0;cursor:zoom-in;box-shadow:0 1px 4px rgba(0,0,0,0.1);';
+                imgEl.onclick = () => _openImageLightbox(imgEl.src);
+                mediaEl.appendChild(imgEl);
+                scrollChatToBottom();
 
-                if (isError) currentToolEl.classList.add('tool-failed');
-                currentToolEl = null;
-            }
-
-        } else if (item.type === 'image') {
-            ensureBotEl();
-            const imgEl = document.createElement('img');
-            imgEl.src = item.content;
-            imgEl.alt = 'screenshot';
-            imgEl.style.cssText = 'max-width:600px;border-radius:8px;margin:8px 0;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.1);';
-            imgEl.onclick = () => window.open(item.content, '_blank');
-            mediaEl.appendChild(imgEl);
-            scrollChatToBottom();
-
-        } else if (item.type === 'text') {
-            // Intermediate text sent before media items; display it but keep SSE open.
-            ensureBotEl();
-            contentEl.classList.remove('sse-streaming');
-            const textContent = item.content || accumulatedText;
-            if (textContent) contentEl.innerHTML = renderMarkdown(textContent);
-            applyHighlighting(botEl);
-            scrollChatToBottom();
-
-        } else if (item.type === 'video') {
-            ensureBotEl();
-            const wrapper = document.createElement('div');
-            wrapper.innerHTML = _buildVideoHtml(item.content);
-            mediaEl.appendChild(wrapper.firstElementChild || wrapper);
-            scrollChatToBottom();
-
-        } else if (item.type === 'file') {
-            ensureBotEl();
-            const fileName = item.file_name || item.content.split('/').pop();
-            const fileEl = document.createElement('a');
-            fileEl.href = item.content;
-            fileEl.download = fileName;
-            fileEl.target = '_blank';
-            fileEl.className = 'file-attachment';
-            fileEl.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;margin:8px 0;border-radius:8px;background:var(--bg-secondary,#f3f4f6);color:var(--text-primary,#374151);text-decoration:none;font-size:14px;border:1px solid var(--border-color,#e5e7eb);';
-            fileEl.innerHTML = `<i class="fas fa-file-download" style="color:#6b7280;"></i> ${fileName}`;
-            mediaEl.appendChild(fileEl);
-            scrollChatToBottom();
-
-        } else if (item.type === 'phase') {
-            // Coarse progress (e.g. cow install-browser); must not close SSE (unlike "done")
-            ensureBotEl();
-            const wrap = document.createElement('div');
-            wrap.className = 'text-xs sm:text-sm text-slate-600 dark:text-slate-400 border-l-2 border-primary-400 pl-2 py-1 my-0.5';
-            wrap.textContent = String(item.content || '');
-            stepsEl.appendChild(wrap);
-            scrollChatToBottom();
-
-        } else if (item.type === 'done') {
-            es.close();
-            delete activeStreams[requestId];
-
-            // item.content may be empty when "done" is only a stream-close signal after media.
-            const finalText = item.content || accumulatedText;
-
-            if (!botEl && finalText) {
-                if (loadingEl) { loadingEl.remove(); loadingEl = null; }
-                addBotMessage(finalText, new Date((item.timestamp || Date.now() / 1000) * 1000), requestId);
-            } else if (botEl) {
+            } else if (item.type === 'text') {
+                // Intermediate text sent before media items; display it but keep SSE open.
+                ensureBotEl();
                 contentEl.classList.remove('sse-streaming');
-                // Only update text content when there is something new to show.
-                if (finalText) contentEl.innerHTML = renderMarkdown(finalText);
+                const textContent = item.content || accumulatedText;
+                if (textContent) contentEl.innerHTML = renderMarkdown(textContent);
                 applyHighlighting(botEl);
-            }
-            scrollChatToBottom();
+                scrollChatToBottom();
 
-        } else if (item.type === 'error') {
+            } else if (item.type === 'video') {
+                ensureBotEl();
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = _buildVideoHtml(item.content);
+                mediaEl.appendChild(wrapper.firstElementChild || wrapper);
+                scrollChatToBottom();
+
+            } else if (item.type === 'file') {
+                ensureBotEl();
+                const fileName = item.file_name || item.content.split('/').pop();
+                const fileEl = document.createElement('a');
+                fileEl.href = item.content;
+                fileEl.download = fileName;
+                fileEl.target = '_blank';
+                fileEl.className = 'file-attachment';
+                fileEl.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;margin:8px 0;border-radius:8px;background:var(--bg-secondary,#f3f4f6);color:var(--text-primary,#374151);text-decoration:none;font-size:14px;border:1px solid var(--border-color,#e5e7eb);';
+                fileEl.innerHTML = `<i class="fas fa-file-download" style="color:#6b7280;"></i> ${fileName}`;
+                mediaEl.appendChild(fileEl);
+                scrollChatToBottom();
+
+            } else if (item.type === 'phase') {
+                // Coarse progress (e.g. cow install-browser); must not close SSE (unlike "done")
+                ensureBotEl();
+                const wrap = document.createElement('div');
+                wrap.className = 'text-xs sm:text-sm text-slate-600 dark:text-slate-400 border-l-2 border-primary-400 pl-2 py-1 my-0.5';
+                wrap.textContent = String(item.content || '');
+                stepsEl.appendChild(wrap);
+                scrollChatToBottom();
+
+            } else if (item.type === 'done') {
+                done = true;
+                es.close();
+                delete activeStreams[requestId];
+
+                // item.content may be empty when "done" is only a stream-close signal after media.
+                const finalText = item.content || accumulatedText;
+
+                if (!botEl && finalText) {
+                    if (loadingEl) { loadingEl.remove(); loadingEl = null; }
+                    addBotMessage(finalText, new Date((item.timestamp || Date.now() / 1000) * 1000), requestId);
+                } else if (botEl) {
+                    contentEl.classList.remove('sse-streaming');
+                    if (finalText) contentEl.innerHTML = renderMarkdown(finalText);
+                    contentEl.dataset.rawMd = finalText || '';
+                    const copyBtn = botEl.querySelector('.copy-msg-btn');
+                    if (copyBtn && finalText) copyBtn.style.display = '';
+                    applyHighlighting(botEl);
+                }
+                scrollChatToBottom();
+
+                if (titleInfo) {
+                    generateSessionTitle(titleInfo.sid, titleInfo.userMsg, '');
+                    titleInfo = null;
+                } else if (sessionPanelOpen) {
+                    loadSessionList();
+                }
+
+            } else if (item.type === 'error') {
+                done = true;
+                es.close();
+                delete activeStreams[requestId];
+                if (loadingEl) { loadingEl.remove(); loadingEl = null; }
+                addBotMessage(t('error_send'), new Date());
+            }
+        };
+
+        es.onerror = function() {
             es.close();
             delete activeStreams[requestId];
-            if (loadingEl) { loadingEl.remove(); loadingEl = null; }
-            addBotMessage(t('error_send'), new Date());
-        }
-    };
 
-    es.onerror = function() {
-        es.close();
-        delete activeStreams[requestId];
-        if (loadingEl) { loadingEl.remove(); loadingEl = null; }
-        if (!botEl) {
-            addBotMessage(t('error_send'), new Date());
-        } else if (accumulatedText) {
-            contentEl.classList.remove('sse-streaming');
-            contentEl.innerHTML = renderMarkdown(accumulatedText);
-            applyHighlighting(botEl);
-        }
-    };
+            if (done) return;
+
+            if (currentReasoningEl) {
+                finalizeThinking(currentReasoningEl, reasoningStartTime, reasoningText);
+                currentReasoningEl = null;
+                reasoningText = '';
+            }
+
+            if (reconnectCount < MAX_RECONNECTS) {
+                reconnectCount++;
+                const delay = Math.min(RECONNECT_BASE_MS * reconnectCount, 5000);
+                console.warn(`[SSE] connection lost for ${requestId}, reconnecting in ${delay}ms (attempt ${reconnectCount}/${MAX_RECONNECTS})`);
+                setTimeout(connect, delay);
+                return;
+            }
+
+            // Exhausted retries, show whatever we have
+            if (loadingEl) { loadingEl.remove(); loadingEl = null; }
+            if (!botEl) {
+                addBotMessage(t('error_send'), new Date());
+            } else if (accumulatedText) {
+                contentEl.classList.remove('sse-streaming');
+                contentEl.innerHTML = renderMarkdown(accumulatedText);
+                applyHighlighting(botEl);
+                bindChatKnowledgeLinks(botEl);
+            }
+        };
+    }
+
+    connect();
 }
 
 function startPolling() {
-    if (isPolling) return;
+    const gen = ++pollGeneration;
     isPolling = true;
+    let pollInFlight = false;
 
     function poll() {
-        if (!isPolling) return;
-        if (document.hidden) { setTimeout(poll, 5000); return; }
+        if (gen !== pollGeneration) return;
+        if (pollInFlight) return;
+        if (document.hidden) { setTimeout(poll, 10000); return; }
 
+        pollInFlight = true;
         fetch('/poll', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1013,18 +1391,23 @@ function startPolling() {
         })
         .then(r => r.json())
         .then(data => {
+            pollInFlight = false;
+            if (gen !== pollGeneration) return;
             if (data.status === 'success' && data.has_content) {
                 const rid = data.request_id;
                 if (loadingContainers[rid]) {
                     loadingContainers[rid].remove();
                     delete loadingContainers[rid];
                 }
+                const welcomeScreen = document.getElementById('welcome-screen');
+                if (welcomeScreen) welcomeScreen.remove();
                 addBotMessage(data.content, new Date(data.timestamp * 1000), rid);
                 scrollChatToBottom();
             }
-            setTimeout(poll, 2000);
+            const delay = (data.status === 'success' && data.has_content) ? 5000 : 10000;
+            setTimeout(poll, delay);
         })
-        .catch(() => { setTimeout(poll, 3000); });
+        .catch(() => { pollInFlight = false; setTimeout(poll, 10000); });
     }
     poll();
 }
@@ -1085,29 +1468,181 @@ function renderToolCallsHtml(toolCalls) {
     }).join('');
 }
 
-function createBotMessageEl(content, timestamp, requestId, toolCalls) {
+// Cap for rendering reasoning content in the bubble. Beyond this size,
+// we skip markdown rendering entirely and show plain text head + tail to
+// keep the page responsive (very long chains-of-thought can otherwise
+// stall or crash the browser when re-parsed by marked.js).
+// Keep this in sync with backend MAX_STORED_REASONING_CHARS and
+// MAX_REASONING_STREAM_CHARS so storage / SSE / display stay aligned.
+const REASONING_RENDER_CAP = 4 * 1024; // 4 KB
+
+function _truncateReasoningForDisplay(text) {
+    if (!text || text.length <= REASONING_RENDER_CAP) return { text, truncated: false, omitted: 0 };
+    const half = Math.floor(REASONING_RENDER_CAP / 2);
+    const head = text.slice(0, half);
+    const tail = text.slice(-half);
+    return {
+        text: head + '\n\n... [' + (text.length - head.length - tail.length) + ' chars omitted] ...\n\n' + tail,
+        truncated: true,
+        omitted: text.length - head.length - tail.length,
+    };
+}
+
+function _renderReasoningBody(text) {
+    // For short reasoning, render as markdown. For long ones, fall back to
+    // an escaped <pre> block to avoid expensive markdown parsing.
+    const { text: shown, truncated } = _truncateReasoningForDisplay(text);
+    if (truncated || shown.length > REASONING_RENDER_CAP) {
+        return '<pre class="thinking-stream-pre">' + escapeHtml(shown) + '</pre>';
+    }
+    return renderMarkdown(shown);
+}
+
+function finalizeThinking(el, startTime, text) {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    el.querySelector('.thinking-summary').textContent = t('thinking_done');
+    const fullDiv = el.querySelector('.thinking-full');
+    fullDiv.innerHTML = `<div class="thinking-duration">${t('thinking_duration')} ${elapsed}s</div>` + _renderReasoningBody(text);
+}
+
+function renderThinkingHtml(text) {
+    if (!text || !text.trim()) return '';
+    const full = text.trim();
+    return `
+<div class="agent-step agent-thinking-step">
+    <div class="thinking-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <i class="fas fa-lightbulb text-amber-400 flex-shrink-0"></i>
+        <span class="thinking-summary">${t('thinking_done')}</span>
+        <i class="fas fa-chevron-right thinking-chevron"></i>
+    </div>
+    <div class="thinking-full">${_renderReasoningBody(full)}</div>
+</div>`;
+}
+
+function renderStepsHtml(steps) {
+    if (!steps || steps.length === 0) return { stepsHtml: '', finalContent: '' };
+
+    // Find the index of the last content step — it becomes the main answer, not a step
+    let lastContentIdx = -1;
+    for (let i = steps.length - 1; i >= 0; i--) {
+        if (steps[i].type === 'content') { lastContentIdx = i; break; }
+    }
+
+    let html = '';
+    let lastContentText = '';
+    for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        if (step.type === 'thinking') {
+            html += renderThinkingHtml(step.content);
+        } else if (step.type === 'content') {
+            if (i === lastContentIdx) {
+                lastContentText = step.content;
+            } else {
+                html += `<div class="agent-step agent-content-step"><div class="agent-content-body">${renderMarkdown(step.content)}</div></div>`;
+            }
+        } else if (step.type === 'tool') {
+            const argsStr = formatToolArgs(step.arguments || {});
+            const resultStr = step.result ? escapeHtml(String(step.result)) : '';
+            html += `
+<div class="agent-step agent-tool-step">
+    <div class="tool-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <i class="fas fa-check text-primary-400 flex-shrink-0 tool-icon"></i>
+        <span class="tool-name">${escapeHtml(step.name || '')}</span>
+        <i class="fas fa-chevron-right tool-chevron"></i>
+    </div>
+    <div class="tool-detail">
+        <div class="tool-detail-section">
+            <div class="tool-detail-label">Input</div>
+            <pre class="tool-detail-content">${argsStr}</pre>
+        </div>
+        ${resultStr ? `
+        <div class="tool-detail-section tool-output-section">
+            <div class="tool-detail-label">Output</div>
+            <pre class="tool-detail-content">${resultStr}</pre>
+        </div>` : ''}
+    </div>
+</div>`;
+            // If this tool sent a file (send/read tool), render the media inline
+            // so it persists across page refreshes (SSE-only file events are not stored).
+            const mediaHtml = _renderSentFileFromToolResult(step);
+            if (mediaHtml) html += mediaHtml;
+        }
+    }
+    return { stepsHtml: html, lastContentText };
+}
+
+// Extract file-to-send metadata from a tool's result and render an inline preview.
+// Returns '' if the result isn't a file_to_send payload.
+function _renderSentFileFromToolResult(step) {
+    if (!step || !step.result) return '';
+    let payload;
+    try {
+        payload = typeof step.result === 'string' ? JSON.parse(step.result) : step.result;
+    } catch (_) { return ''; }
+    if (!payload || payload.type !== 'file_to_send' || !payload.path) return '';
+    const webUrl = _toWebUrl(payload.path);
+    const fileType = payload.file_type || 'file';
+    const fileName = payload.file_name || payload.path.split('/').pop();
+    if (fileType === 'image') {
+        return `<div class="agent-step">${_buildImageHtml(webUrl)}</div>`;
+    }
+    if (fileType === 'video') {
+        return `<div class="agent-step">${_buildVideoHtml(webUrl)}</div>`;
+    }
+    return `<div class="agent-step"><a href="${webUrl}" download="${escapeHtml(fileName)}" target="_blank" ` +
+        `style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;margin:8px 0;border-radius:8px;` +
+        `background:var(--bg-secondary,#f3f4f6);color:var(--text-primary,#374151);text-decoration:none;font-size:14px;` +
+        `border:1px solid var(--border-color,#e5e7eb);">` +
+        `<i class="fas fa-file-download" style="color:#6b7280;"></i> ${escapeHtml(fileName)}</a></div>`;
+}
+
+function createBotMessageEl(content, timestamp, requestId, msg) {
     const el = document.createElement('div');
     el.className = 'flex gap-3 px-4 sm:px-6 py-3';
     if (requestId) el.dataset.requestId = requestId;
-    const toolsHtml = renderToolCallsHtml(toolCalls);
+
+    let stepsHtml = '';
+    let displayContent = content;
+
+    if (msg && msg.steps && msg.steps.length > 0) {
+        // New format: ordered steps with interleaved content
+        const result = renderStepsHtml(msg.steps);
+        stepsHtml = result.stepsHtml;
+        // The final content (last text after all steps) is the main answer
+        displayContent = content || result.lastContentText;
+    } else {
+        // Legacy format: separate tool_calls + optional reasoning
+        const toolCalls = msg && msg.tool_calls;
+        const reasoning = msg && msg.reasoning;
+        stepsHtml = renderThinkingHtml(reasoning) + renderToolCallsHtml(toolCalls);
+    }
+
     el.innerHTML = `
         <img src="assets/logo.jpg" alt="CowAgent" class="w-8 h-8 rounded-lg flex-shrink-0">
         <div class="min-w-0 flex-1 max-w-[85%]">
             <div class="bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3 text-sm leading-relaxed msg-content text-slate-700 dark:text-slate-200">
-                ${toolsHtml ? `<div class="agent-steps">${toolsHtml}</div>` : ''}
-                <div class="answer-content">${renderMarkdown(content)}</div>
+                ${stepsHtml ? `<div class="agent-steps">${stepsHtml}</div>` : ''}
+                <div class="answer-content">${renderMarkdown(displayContent)}</div>
             </div>
-            <div class="text-xs text-slate-400 dark:text-slate-500 mt-1.5">${formatTime(timestamp)}</div>
+            <div class="flex items-center gap-2 mt-1.5">
+                <span class="text-xs text-slate-400 dark:text-slate-500">${formatTime(timestamp)}</span>
+                <button class="copy-msg-btn text-xs text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 transition-colors cursor-pointer" title="${currentLang === 'zh' ? '复制' : 'Copy'}">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
         </div>
     `;
+    el.querySelector('.answer-content').dataset.rawMd = displayContent;
     applyHighlighting(el);
+    bindChatKnowledgeLinks(el);
     return el;
 }
 
 function addUserMessage(content, timestamp, attachments) {
     const el = createUserMessageEl(content, timestamp, attachments);
     messagesDiv.appendChild(el);
-    scrollChatToBottom();
+    _autoScrollEnabled = true;
+    scrollChatToBottom(true);
 }
 
 function addBotMessage(content, timestamp, requestId) {
@@ -1143,16 +1678,37 @@ function loadHistory(page) {
                 // Keep the "load more" sentinel in place (inserted below)
             }
 
+            const ctxStartSeq = data.context_start_seq || 0;
+            let dividerInserted = false;
+
             data.messages.forEach(msg => {
                 const hasContent = msg.content && msg.content.trim();
                 const hasToolCalls = msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0;
                 if (!hasContent && !hasToolCalls) return;
+
+                // Insert context divider when transitioning from above to below boundary
+                if (ctxStartSeq > 0 && !dividerInserted && msg._seq !== undefined && msg._seq >= ctxStartSeq) {
+                    dividerInserted = true;
+                    const divider = document.createElement('div');
+                    divider.className = 'context-divider';
+                    divider.innerHTML = `<span>${t('context_cleared')}</span>`;
+                    fragment.appendChild(divider);
+                }
+
                 const ts = new Date(msg.created_at * 1000);
                 const el = msg.role === 'user'
                     ? createUserMessageEl(msg.content, ts)
-                    : createBotMessageEl(msg.content || '', ts, null, msg.tool_calls);
+                    : createBotMessageEl(msg.content || '', ts, null, msg);
                 fragment.appendChild(el);
             });
+
+            // If context was cleared but no new messages exist yet, append divider at the end
+            if (ctxStartSeq > 0 && !dividerInserted) {
+                const divider = document.createElement('div');
+                divider.className = 'context-divider';
+                divider.innerHTML = `<span>${t('context_cleared')}</span>`;
+                fragment.appendChild(divider);
+            }
 
             // Prepend history above any existing messages
             const sentinel = document.getElementById('history-load-more');
@@ -1179,7 +1735,7 @@ function loadHistory(page) {
             if (isFirstLoad) {
                 // Use requestAnimationFrame to ensure the DOM has fully rendered
                 // before scrolling, otherwise scrollHeight may not reflect new content.
-                requestAnimationFrame(() => scrollChatToBottom());
+                requestAnimationFrame(() => scrollChatToBottom(true));
             } else {
                 // Restore scroll position so loading older messages doesn't jump the view
                 messagesDiv.scrollTop = messagesDiv.scrollHeight - prevScrollHeight;
@@ -1215,17 +1771,18 @@ function newChat() {
     // Generate a fresh session and persist it so the next page load also starts clean
     sessionId = generateSessionId();
     localStorage.setItem(SESSION_ID_KEY, sessionId);
-    isPolling = false;
     loadingContainers = {};
+    startPolling();  // bump generation so old loop self-cancels, new loop uses fresh sessionId
     messagesDiv.innerHTML = '';
     const ws = document.createElement('div');
     ws.id = 'welcome-screen';
-    ws.className = 'flex flex-col items-center justify-center h-full px-6 py-12';
+    ws.className = 'flex flex-col items-center justify-center h-full px-6 pb-16';
+    ws.style.paddingTop = '6vh';
     ws.innerHTML = `
         <img src="assets/logo.jpg" alt="CowAgent" class="w-16 h-16 rounded-2xl mb-6 shadow-lg shadow-primary-500/20">
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-3">${appConfig.title || 'CowAgent'}</h1>
         <p class="text-slate-500 dark:text-slate-400 text-center max-w-lg mb-10 leading-relaxed" data-i18n="welcome_subtitle">${t('welcome_subtitle')}</p>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl">
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-2xl">
             <div class="example-card group bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 rounded-xl p-4 cursor-pointer hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all duration-200">
                 <div class="flex items-center gap-2 mb-2">
                     <div class="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
@@ -1253,11 +1810,45 @@ function newChat() {
                 </div>
                 <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed" data-i18n="example_code_text">${t('example_code_text')}</p>
             </div>
+            <div class="example-card group bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 rounded-xl p-4 cursor-pointer hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all duration-200">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center">
+                        <i class="fas fa-book text-violet-500 text-xs"></i>
+                    </div>
+                    <span class="font-medium text-sm text-slate-700 dark:text-slate-200" data-i18n="example_knowledge_title">${t('example_knowledge_title')}</span>
+                </div>
+                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed" data-i18n="example_knowledge_text">${t('example_knowledge_text')}</p>
+            </div>
+            <div class="example-card group bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 rounded-xl p-4 cursor-pointer hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all duration-200">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center">
+                        <i class="fas fa-puzzle-piece text-rose-500 text-xs"></i>
+                    </div>
+                    <span class="font-medium text-sm text-slate-700 dark:text-slate-200" data-i18n="example_skill_title">${t('example_skill_title')}</span>
+                </div>
+                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed" data-i18n="example_skill_text">${t('example_skill_text')}</p>
+            </div>
+            <div class="example-card group bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 rounded-xl p-4 cursor-pointer hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all duration-200" data-send="/help">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                        <i class="fas fa-terminal text-slate-500 text-xs"></i>
+                    </div>
+                    <span class="font-medium text-sm text-slate-700 dark:text-slate-200" data-i18n="example_web_title">${t('example_web_title')}</span>
+                </div>
+                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed" data-i18n="example_web_text">${t('example_web_text')}</p>
+            </div>
         </div>
     `;
     messagesDiv.appendChild(ws);
     ws.querySelectorAll('.example-card').forEach(card => {
         card.addEventListener('click', () => {
+            const sendText = card.dataset.send;
+            if (sendText) {
+                chatInput.value = sendText;
+                chatInput.dispatchEvent(new Event('input'));
+                chatInput.focus();
+                return;
+            }
             const textEl = card.querySelector('[data-i18n*="text"]');
             if (textEl) {
                 chatInput.value = textEl.textContent;
@@ -1267,13 +1858,379 @@ function newChat() {
         });
     });
     if (currentView !== 'chat') navigateTo('chat');
+
+    // Show panel and load full session list, then prepend the new session on top
+    const panel = document.getElementById('session-panel');
+    if (panel && !sessionPanelOpen) {
+        sessionPanelOpen = true;
+        panel.classList.remove('hidden');
+        _showSessionOverlay();
+        _persistPanelState();
+    }
+    const newSid = sessionId;
+    loadSessionList(() => _addOptimisticSessionItem(newSid));
+}
+
+// =====================================================================
+// Session Panel
+// =====================================================================
+
+const SESSION_PANEL_KEY = 'cow_session_panel_open';
+let sessionPanelOpen = localStorage.getItem(SESSION_PANEL_KEY) === '1';
+
+function _persistPanelState() {
+    localStorage.setItem(SESSION_PANEL_KEY, sessionPanelOpen ? '1' : '0');
+}
+
+function _isMobileView() {
+    return window.innerWidth <= 768;
+}
+
+function _showSessionOverlay() {
+    if (!_isMobileView()) return;
+    const overlay = document.getElementById('session-panel-overlay');
+    if (overlay) overlay.classList.remove('hidden');
+}
+
+function _hideSessionOverlay() {
+    const overlay = document.getElementById('session-panel-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function closeSessionPanel() {
+    const panel = document.getElementById('session-panel');
+    if (!panel || !sessionPanelOpen) return;
+    sessionPanelOpen = false;
+    panel.classList.add('hidden');
+    _hideSessionOverlay();
+    _persistPanelState();
+}
+
+function toggleSessionPanel() {
+    const panel = document.getElementById('session-panel');
+    if (!panel) return;
+    sessionPanelOpen = !sessionPanelOpen;
+    panel.classList.toggle('hidden', !sessionPanelOpen);
+    if (sessionPanelOpen) {
+        _showSessionOverlay();
+    } else {
+        _hideSessionOverlay();
+    }
+    _persistPanelState();
+    if (sessionPanelOpen) loadSessionList();
+}
+
+function openSessionPanel() {
+    const panel = document.getElementById('session-panel');
+    if (!panel || sessionPanelOpen) return;
+    sessionPanelOpen = true;
+    panel.classList.remove('hidden');
+    _showSessionOverlay();
+    _persistPanelState();
+    loadSessionList();
+}
+
+function _restoreSessionPanel() {
+    const panel = document.getElementById('session-panel');
+    if (!panel) return;
+    if (sessionPanelOpen && !_isMobileView()) {
+        panel.classList.remove('hidden');
+        _showSessionOverlay();
+        loadSessionList();
+    } else {
+        panel.classList.add('hidden');
+        _hideSessionOverlay();
+    }
+}
+
+function _applyInputTooltips() {
+    const set = (id, key, pos) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.setAttribute('data-tooltip', t(key));
+        el.removeAttribute('title');
+        if (pos) el.setAttribute('data-tooltip-pos', pos);
+    };
+    set('new-chat-btn', 'tip_new_chat');
+    set('clear-context-btn', 'tip_clear_context');
+    set('attach-btn', 'tip_attach_file');
+    set('session-toggle-btn', 'session_history', 'bottom');
+}
+
+function _addOptimisticSessionItem(sid) {
+    const container = document.getElementById('session-list');
+    if (!container) return;
+
+    const emptyEl = container.querySelector('.session-empty');
+    if (emptyEl) emptyEl.remove();
+
+    document.querySelectorAll('.session-item.active').forEach(el => el.classList.remove('active'));
+
+    const todayLabel = t('today');
+    let firstGroup = container.querySelector('.session-group-label');
+    if (!firstGroup || firstGroup.textContent !== todayLabel) {
+        const header = document.createElement('div');
+        header.className = 'session-group-label';
+        header.textContent = todayLabel;
+        container.prepend(header);
+        firstGroup = header;
+    }
+
+    const title = t('new_chat');
+    const item = document.createElement('div');
+    item.className = 'session-item active';
+    item.dataset.sessionId = sid;
+    item.innerHTML = `
+        <i class="fas fa-message session-icon"></i>
+        <span class="session-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+        <button class="session-delete" onclick="event.stopPropagation(); deleteSession('${sid}')" title="Delete">
+            <i class="fas fa-trash-can"></i>
+        </button>
+    `;
+    item.addEventListener('click', () => switchSession(sid));
+    firstGroup.insertAdjacentElement('afterend', item);
+}
+
+function _sessionTimeGroup(ts) {
+    const now = new Date();
+    const d = new Date(ts * 1000);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    if (d >= today) return t('today');
+    if (d >= yesterday) return t('yesterday');
+    return t('earlier');
+}
+
+let _sessionPage = 1;
+let _sessionHasMore = false;
+let _sessionLoading = false;
+const _SESSION_PAGE_SIZE = 50;
+
+function loadSessionList(onDone) {
+    const container = document.getElementById('session-list');
+    if (!container) return;
+
+    _sessionPage = 1;
+    _sessionHasMore = false;
+
+    _fetchSessionPage(1, true, onDone);
+}
+
+function _fetchSessionPage(page, clear, onDone) {
+    if (_sessionLoading) return;
+    _sessionLoading = true;
+
+    const container = document.getElementById('session-list');
+    if (!container) { _sessionLoading = false; return; }
+
+    // Remove existing "load more" sentinel before fetching
+    const oldSentinel = container.querySelector('.session-load-more');
+    if (oldSentinel) oldSentinel.remove();
+
+    fetch(`/api/sessions?page=${page}&page_size=${_SESSION_PAGE_SIZE}`)
+        .then(r => r.json())
+        .then(data => {
+            _sessionLoading = false;
+            if (data.status !== 'success') return;
+
+            if (clear) container.innerHTML = '';
+
+            const sessions = data.sessions || [];
+            _sessionPage = page;
+            _sessionHasMore = !!data.has_more;
+
+            if (sessions.length === 0 && page === 1) {
+                container.innerHTML = '<div class="session-empty">' + t('untitled_session') + '</div>';
+                if (typeof onDone === 'function') onDone();
+                return;
+            }
+
+            // Track last group label already in the container
+            const existingLabels = container.querySelectorAll('.session-group-label');
+            let lastGroup = existingLabels.length > 0
+                ? existingLabels[existingLabels.length - 1].textContent
+                : '';
+
+            sessions.forEach(s => {
+                const group = _sessionTimeGroup(s.last_active);
+                if (group !== lastGroup) {
+                    lastGroup = group;
+                    const header = document.createElement('div');
+                    header.className = 'session-group-label';
+                    header.textContent = group;
+                    container.appendChild(header);
+                }
+
+                const item = document.createElement('div');
+                const isActive = s.session_id === sessionId;
+                item.className = 'session-item' + (isActive ? ' active' : '');
+                item.dataset.sessionId = s.session_id;
+
+                const title = s.title || t('untitled_session');
+                item.innerHTML = `
+                    <i class="fas fa-message session-icon"></i>
+                    <span class="session-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+                    <button class="session-delete" onclick="event.stopPropagation(); deleteSession('${s.session_id}')" title="Delete">
+                        <i class="fas fa-trash-can"></i>
+                    </button>
+                `;
+                item.addEventListener('click', () => switchSession(s.session_id));
+                container.appendChild(item);
+            });
+
+            if (typeof onDone === 'function') onDone();
+        })
+        .catch(() => { _sessionLoading = false; });
+}
+
+function _onSessionListScroll() {
+    if (!_sessionHasMore || _sessionLoading) return;
+    const container = document.getElementById('session-list');
+    if (!container) return;
+    // Trigger when scrolled near the bottom (within 60px)
+    if (container.scrollHeight - container.scrollTop - container.clientHeight < 60) {
+        _fetchSessionPage(_sessionPage + 1, false);
+    }
+}
+
+// Attach scroll listener once DOM is ready
+(function _initSessionScroll() {
+    const el = document.getElementById('session-list');
+    if (el) {
+        el.addEventListener('scroll', _onSessionListScroll);
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            const el2 = document.getElementById('session-list');
+            if (el2) el2.addEventListener('scroll', _onSessionListScroll);
+        });
+    }
+})();
+
+function switchSession(newSessionId) {
+    if (newSessionId === sessionId) {
+        if (currentView !== 'chat') navigateTo('chat');
+        return;
+    }
+
+    Object.values(activeStreams).forEach(es => { try { es.close(); } catch (_) {} });
+    activeStreams = {};
+    loadingContainers = {};
+
+    sessionId = newSessionId;
+    localStorage.setItem(SESSION_ID_KEY, sessionId);
+
+    historyPage = 0;
+    historyHasMore = false;
+    historyLoading = false;
+
+    messagesDiv.innerHTML = '';
+    loadHistory(1);
+    startPolling();
+
+    document.querySelectorAll('.session-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.sessionId === sessionId);
+    });
+
+    if (_isMobileView()) closeSessionPanel();
+    if (currentView !== 'chat') navigateTo('chat');
+}
+
+function deleteSession(sid) {
+    showConfirmModal(t('delete_session_title'), t('delete_session_confirm'), () => {
+        fetch(`/api/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'success') return;
+                if (sid === sessionId) {
+                    newChat();
+                } else {
+                    loadSessionList();
+                }
+            })
+            .catch(() => {});
+    });
+}
+
+function showConfirmModal(title, message, onConfirm) {
+    let overlay = document.getElementById('confirm-modal-overlay');
+    if (overlay) overlay.remove();
+
+    overlay = document.createElement('div');
+    overlay.id = 'confirm-modal-overlay';
+    overlay.className = 'confirm-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'confirm-modal';
+    modal.innerHTML = `
+        <div class="confirm-title">${escapeHtml(title)}</div>
+        <div class="confirm-message">${escapeHtml(message)}</div>
+        <div class="confirm-actions">
+            <button class="confirm-btn confirm-btn-cancel">${t('confirm_cancel')}</button>
+            <button class="confirm-btn confirm-btn-ok">${t('confirm_yes')}</button>
+        </div>
+    `;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+
+    const close = () => {
+        overlay.classList.remove('visible');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    modal.querySelector('.confirm-btn-cancel').addEventListener('click', close);
+    modal.querySelector('.confirm-btn-ok').addEventListener('click', () => {
+        close();
+        onConfirm();
+    });
+}
+
+function clearContext() {
+    fetch(`/api/sessions/${encodeURIComponent(sessionId)}/clear_context`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'success') return;
+            // Insert a visual divider in the chat
+            const divider = document.createElement('div');
+            divider.className = 'context-divider';
+            divider.innerHTML = `<span>${t('context_cleared')}</span>`;
+            messagesDiv.appendChild(divider);
+            scrollChatToBottom();
+        })
+        .catch(() => {});
+}
+
+function generateSessionTitle(sid, userMsg, assistantReply) {
+    fetch(`/api/sessions/${encodeURIComponent(sid)}/generate_title`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_message: userMsg, assistant_reply: assistantReply }),
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success' && sessionPanelOpen) {
+                loadSessionList();
+            }
+        })
+        .catch(() => {});
 }
 
 // =====================================================================
 // Utilities
 // =====================================================================
 function formatTime(date) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const now = new Date();
+    const sameDay = date.getFullYear() === now.getFullYear()
+        && date.getMonth() === now.getMonth()
+        && date.getDate() === now.getDate();
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (sameDay) return time;
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    if (date.getFullYear() === now.getFullYear()) return `${m}-${d} ${time}`;
+    return `${date.getFullYear()}-${m}-${d} ${time}`;
 }
 
 function escapeHtml(str) {
@@ -1296,8 +2253,17 @@ function formatToolArgs(args) {
     }
 }
 
-function scrollChatToBottom() {
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+function scrollChatToBottom(force) {
+    if (force || _autoScrollEnabled) {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+}
+
+function _updateScrollToBottomBtn() {
+    const btn = document.getElementById('scroll-to-bottom-btn');
+    if (!btn) return;
+    const distFromBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
+    btn.classList.toggle('hidden', distFromBottom <= _SCROLL_THRESHOLD);
 }
 
 function applyHighlighting(container) {
@@ -1393,8 +2359,36 @@ function initConfigView(data) {
     syncModelSelection(configCurrentModel);
 
     document.getElementById('cfg-max-tokens').value = data.agent_max_context_tokens || 50000;
-    document.getElementById('cfg-max-turns').value = data.agent_max_context_turns || 30;
-    document.getElementById('cfg-max-steps').value = data.agent_max_steps || 15;
+    document.getElementById('cfg-max-turns').value = data.agent_max_context_turns || 20;
+    document.getElementById('cfg-max-steps').value = data.agent_max_steps || 20;
+    document.getElementById('cfg-enable-thinking').checked = data.enable_thinking === true;
+
+    const pwdInput = document.getElementById('cfg-password');
+    const maskedPwd = data.web_password_masked || '';
+    pwdInput.value = maskedPwd;
+    pwdInput.dataset.masked = maskedPwd ? '1' : '';
+    pwdInput.dataset.maskedVal = maskedPwd;
+    pwdInput.classList.toggle('cfg-key-masked', !!maskedPwd);
+
+    if (maskedPwd) {
+        pwdInput.placeholder = '••••••••';
+    } else {
+        pwdInput.placeholder = '';
+    }
+
+    if (!pwdInput._cfgBound) {
+        pwdInput.addEventListener('focus', function() {
+            if (this.dataset.masked === '1') {
+                this.value = '';
+                this.dataset.masked = '';
+                this.classList.remove('cfg-key-masked');
+            }
+        });
+        pwdInput.addEventListener('input', function() {
+            this.dataset.masked = '';
+        });
+        pwdInput._cfgBound = true;
+    }
 }
 
 function detectProvider(model) {
@@ -1410,6 +2404,9 @@ function onProviderChange(pid) {
     cfgProviderValue = pid || getDropdownValue(document.getElementById('cfg-provider'));
     const p = configProviders[cfgProviderValue];
     if (!p) return;
+
+    const customTip = document.getElementById('cfg-custom-tip');
+    if (customTip) customTip.classList.toggle('hidden', cfgProviderValue !== 'custom');
 
     const modelEl = document.getElementById('cfg-model-select');
     const modelOpts = (p.models || []).map(m => ({ value: m, label: m }));
@@ -1459,12 +2456,17 @@ function onProviderChange(pid) {
     }
 
     // API Base
+    const apiBaseInput = document.getElementById('cfg-api-base');
     if (p.api_base_key) {
         document.getElementById('cfg-api-base-wrap').classList.remove('hidden');
-        document.getElementById('cfg-api-base').value = configApiBases[p.api_base_key] || p.api_base_default || '';
+        apiBaseInput.value = configApiBases[p.api_base_key] || p.api_base_default || '';
+        // Hint the version-path tail (e.g. /v1) so users are reminded to
+        // include it themselves. We don't auto-rewrite anything server-side.
+        apiBaseInput.placeholder = p.api_base_placeholder || 'https://...';
     } else {
         document.getElementById('cfg-api-base-wrap').classList.add('hidden');
-        document.getElementById('cfg-api-base').value = '';
+        apiBaseInput.value = '';
+        apiBaseInput.placeholder = 'https://...';
     }
 
     onModelSelectChange(modelOpts[0] ? modelOpts[0].value : '');
@@ -1600,8 +2602,9 @@ function saveModelConfig() {
 function saveAgentConfig() {
     const updates = {
         agent_max_context_tokens: parseInt(document.getElementById('cfg-max-tokens').value) || 50000,
-        agent_max_context_turns: parseInt(document.getElementById('cfg-max-turns').value) || 30,
-        agent_max_steps: parseInt(document.getElementById('cfg-max-steps').value) || 15,
+        agent_max_context_turns: parseInt(document.getElementById('cfg-max-turns').value) || 20,
+        agent_max_steps: parseInt(document.getElementById('cfg-max-steps').value) || 20,
+        enable_thinking: document.getElementById('cfg-enable-thinking').checked,
     };
 
     const btn = document.getElementById('cfg-agent-save');
@@ -1620,6 +2623,40 @@ function saveAgentConfig() {
         }
     })
     .catch(() => showStatus('cfg-agent-status', 'config_save_error', true))
+    .finally(() => { btn.disabled = false; });
+}
+
+function savePasswordConfig() {
+    const input = document.getElementById('cfg-password');
+    if (input.dataset.masked === '1') {
+        showStatus('cfg-password-status', 'config_saved', false);
+        return;
+    }
+    const newPwd = input.value.trim();
+    const btn = document.getElementById('cfg-password-save');
+    btn.disabled = true;
+    fetch('/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: { web_password: newPwd } })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            if (newPwd) {
+                showStatus('cfg-password-status', 'config_password_changed', false);
+                setTimeout(() => { window.location.reload(); }, 1500);
+            } else {
+                input.dataset.masked = '';
+                input.dataset.maskedVal = '';
+                input.classList.remove('cfg-key-masked');
+                showStatus('cfg-password-status', 'config_password_cleared', false);
+            }
+        } else {
+            showStatus('cfg-password-status', 'config_save_error', true);
+        }
+    })
+    .catch(() => showStatus('cfg-password-status', 'config_save_error', true))
     .finally(() => { btn.disabled = false; });
 }
 
@@ -1793,12 +2830,20 @@ function toggleSkill(name, currentlyEnabled) {
 // Memory View
 // =====================================================================
 let memoryPage = 1;
+let memoryCategory = 'memory';   // 'memory' | 'dream'
 const memoryPageSize = 10;
+
+function switchMemoryTab(tab) {
+    document.querySelectorAll('.memory-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('memory-tab-' + tab).classList.add('active');
+    memoryCategory = tab === 'dreams' ? 'dream' : 'memory';
+    loadMemoryView(1);
+}
 
 function loadMemoryView(page) {
     page = page || 1;
     memoryPage = page;
-    fetch(`/api/memory?page=${page}&page_size=${memoryPageSize}`).then(r => r.json()).then(data => {
+    fetch(`/api/memory?page=${page}&page_size=${memoryPageSize}&category=${memoryCategory}`).then(r => r.json()).then(data => {
         if (data.status !== 'success') return;
         const emptyEl = document.getElementById('memory-empty');
         const listEl = document.getElementById('memory-list');
@@ -1806,7 +2851,15 @@ function loadMemoryView(page) {
         const total = data.total || 0;
 
         if (total === 0) {
-            emptyEl.querySelector('p').textContent = currentLang === 'zh' ? '暂无记忆文件' : 'No memory files';
+            const emptyIcon = emptyEl.querySelector('i');
+            const emptyTitle = emptyEl.querySelector('p');
+            if (memoryCategory === 'dream') {
+                emptyIcon.className = 'fas fa-moon text-purple-400 text-xl';
+                emptyTitle.textContent = currentLang === 'zh' ? '暂无梦境日记' : 'No dream diaries yet';
+            } else {
+                emptyIcon.className = 'fas fa-brain text-purple-400 text-xl';
+                emptyTitle.textContent = currentLang === 'zh' ? '暂无记忆文件' : 'No memory files';
+            }
             emptyEl.classList.remove('hidden');
             listEl.classList.add('hidden');
             return;
@@ -1819,10 +2872,15 @@ function loadMemoryView(page) {
         files.forEach(f => {
             const tr = document.createElement('tr');
             tr.className = 'border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors';
-            tr.onclick = () => openMemoryFile(f.filename);
-            const typeLabel = f.type === 'global'
-                ? '<span class="px-2 py-0.5 rounded-full text-xs bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">Global</span>'
-                : '<span class="px-2 py-0.5 rounded-full text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">Daily</span>';
+            tr.onclick = () => openMemoryFile(f.filename, memoryCategory);
+            let typeLabel;
+            if (f.type === 'global') {
+                typeLabel = '<span class="px-2 py-0.5 rounded-full text-xs bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">Global</span>';
+            } else if (f.type === 'dream') {
+                typeLabel = '<span class="px-2 py-0.5 rounded-full text-xs bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">Dream</span>';
+            } else {
+                typeLabel = '<span class="px-2 py-0.5 rounded-full text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">Daily</span>';
+            }
             const sizeStr = f.size < 1024 ? f.size + ' B' : (f.size / 1024).toFixed(1) + ' KB';
             tr.innerHTML = `
                 <td class="px-4 py-3 text-sm font-mono text-slate-700 dark:text-slate-200">${escapeHtml(f.filename)}</td>
@@ -1844,8 +2902,9 @@ function loadMemoryView(page) {
     }).catch(() => {});
 }
 
-function openMemoryFile(filename) {
-    fetch(`/api/memory/content?filename=${encodeURIComponent(filename)}`).then(r => r.json()).then(data => {
+function openMemoryFile(filename, category) {
+    category = category || 'memory';
+    fetch(`/api/memory/content?filename=${encodeURIComponent(filename)}&category=${category}`).then(r => r.json()).then(data => {
         if (data.status !== 'success') return;
         document.getElementById('memory-panel-list').classList.add('hidden');
         const panel = document.getElementById('memory-panel-viewer');
@@ -2742,33 +3801,610 @@ navigateTo = function(viewId) {
     if (viewId === 'config') loadConfigView();
     else if (viewId === 'skills') loadSkillsView();
     else if (viewId === 'memory') {
-        // Always start from the list panel when navigating to memory
         document.getElementById('memory-panel-viewer').classList.add('hidden');
         document.getElementById('memory-panel-list').classList.remove('hidden');
-        loadMemoryView(1);
+        switchMemoryTab('files');
     }
+    else if (viewId === 'knowledge') loadKnowledgeView();
     else if (viewId === 'channels') loadChannelsView();
     else if (viewId === 'tasks') loadTasksView();
     else if (viewId === 'logs') startLogStream();
 };
 
 // =====================================================================
+// Knowledge View
+// =====================================================================
+let _knowledgeTreeData = [];
+let _knowledgeRootFiles = [];
+let _knowledgeCurrentFile = null;
+let _knowledgeGraphLoaded = false;
+
+function loadKnowledgeView() {
+    // Reset to docs tab
+    switchKnowledgeTab('docs');
+    _knowledgeGraphLoaded = false;
+    _knowledgeCurrentFile = null;
+
+    fetch('/api/knowledge/list').then(r => r.json()).then(data => {
+        if (data.status !== 'success') return;
+
+        const emptyEl = document.getElementById('knowledge-empty');
+        const docsPanel = document.getElementById('knowledge-panel-docs');
+        const statsEl = document.getElementById('knowledge-stats');
+
+        const tree = data.tree || [];
+        const rootFiles = data.root_files || [];
+        _knowledgeTreeData = tree;
+        _knowledgeRootFiles = rootFiles;
+        const stats = data.stats || {};
+        const totalPages = stats.pages || 0;
+        const sizeStr = stats.size < 1024 ? stats.size + ' B' : (stats.size / 1024).toFixed(1) + ' KB';
+
+        statsEl.textContent = totalPages + ' pages · ' + sizeStr;
+
+        if (totalPages === 0) {
+            emptyEl.querySelector('p').textContent = t('knowledge_empty_hint');
+            const guideEl = document.getElementById('knowledge-empty-guide');
+            if (guideEl) guideEl.classList.remove('hidden');
+            emptyEl.classList.remove('hidden');
+            docsPanel.classList.add('hidden');
+            return;
+        }
+        emptyEl.classList.add('hidden');
+        docsPanel.classList.remove('hidden');
+
+        renderKnowledgeTree(tree, rootFiles);
+
+        // Auto-select the first file (desktop only)
+        if (window.innerWidth >= 768) {
+            const firstFile = rootFiles.length > 0 ? rootFiles[0] : null;
+            const firstGroup = !firstFile ? tree.find(g => g.files && g.files.length > 0) : null;
+            if (firstFile) {
+                openKnowledgeFile(firstFile.name, firstFile.title);
+            } else if (firstGroup) {
+                const gf = firstGroup.files[0];
+                openKnowledgeFile(firstGroup.dir + '/' + gf.name, gf.title);
+            }
+        } else {
+            document.getElementById('knowledge-content-placeholder').classList.add('hidden');
+            document.getElementById('knowledge-content-viewer').classList.add('hidden');
+        }
+    }).catch(() => {});
+}
+
+function renderKnowledgeTree(tree, rootFilesOrFilter, filter) {
+    const container = document.getElementById('knowledge-tree');
+    container.innerHTML = '';
+    let rootFiles, lowerFilter;
+    if (typeof rootFilesOrFilter === 'string') {
+        rootFiles = _knowledgeRootFiles;
+        lowerFilter = (rootFilesOrFilter || '').toLowerCase();
+    } else {
+        rootFiles = rootFilesOrFilter || _knowledgeRootFiles;
+        lowerFilter = (filter || '').toLowerCase();
+    }
+    (rootFiles || []).forEach(f => {
+        if (lowerFilter && !f.title.toLowerCase().includes(lowerFilter) && !f.name.toLowerCase().includes(lowerFilter)) return;
+        const fbtn = document.createElement('button');
+        fbtn.className = 'knowledge-tree-file' + (_knowledgeCurrentFile === f.name ? ' active' : '');
+        fbtn.dataset.path = f.name;
+        fbtn.innerHTML = `<i class="fas fa-file-lines text-[10px] text-slate-400"></i><span class="truncate">${escapeHtml(f.title)}</span>`;
+        fbtn.onclick = () => openKnowledgeFile(f.name, f.title);
+        container.appendChild(fbtn);
+    });
+    _renderKnowledgeGroups(container, tree, '', lowerFilter, 0);
+}
+
+function _renderKnowledgeGroups(container, groups, parentPath, lowerFilter, depth) {
+    const indent = depth * 12;
+    groups.forEach(group => {
+        const groupPath = parentPath ? parentPath + '/' + group.dir : group.dir;
+        const files = (group.files || []).filter(f =>
+            !lowerFilter || f.title.toLowerCase().includes(lowerFilter) || f.name.toLowerCase().includes(lowerFilter)
+        );
+        const children = group.children || [];
+        const hasMatchingChildren = lowerFilter ? _hasFilterMatch(children, lowerFilter) : children.length > 0;
+        if (files.length === 0 && !hasMatchingChildren && lowerFilter) return;
+
+        const div = document.createElement('div');
+        div.className = 'knowledge-tree-group open';
+
+        const fileCount = _countFiles(group);
+        const btn = document.createElement('button');
+        btn.className = 'knowledge-tree-group-btn';
+        btn.style.paddingLeft = (8 + indent) + 'px';
+        btn.innerHTML = `<i class="fas fa-chevron-right chevron"></i><i class="fas fa-folder text-amber-400 text-[11px]"></i><span>${escapeHtml(group.dir)}</span><span class="ml-auto text-[10px] text-slate-400">${fileCount}</span>`;
+        btn.onclick = () => div.classList.toggle('open');
+        div.appendChild(btn);
+
+        const items = document.createElement('div');
+        items.className = 'knowledge-tree-group-items';
+        files.forEach(f => {
+            const fbtn = document.createElement('button');
+            const fpath = groupPath + '/' + f.name;
+            fbtn.className = 'knowledge-tree-file' + (_knowledgeCurrentFile === fpath ? ' active' : '');
+            fbtn.dataset.path = fpath;
+            fbtn.style.paddingLeft = (24 + indent) + 'px';
+            fbtn.innerHTML = `<i class="fas fa-file-lines text-[10px] text-slate-400"></i><span class="truncate">${escapeHtml(f.title)}</span>`;
+            fbtn.onclick = () => openKnowledgeFile(fpath, f.title);
+            items.appendChild(fbtn);
+        });
+        if (children.length > 0) {
+            _renderKnowledgeGroups(items, children, groupPath, lowerFilter, depth + 1);
+        }
+        div.appendChild(items);
+        container.appendChild(div);
+    });
+}
+
+function _hasFilterMatch(groups, lowerFilter) {
+    for (const g of groups) {
+        for (const f of (g.files || [])) {
+            if (f.title.toLowerCase().includes(lowerFilter) || f.name.toLowerCase().includes(lowerFilter)) return true;
+        }
+        if (_hasFilterMatch(g.children || [], lowerFilter)) return true;
+    }
+    return false;
+}
+
+function _countFiles(group) {
+    let count = (group.files || []).length;
+    for (const child of (group.children || [])) {
+        count += _countFiles(child);
+    }
+    return count;
+}
+
+function filterKnowledgeTree(query) {
+    renderKnowledgeTree(_knowledgeTreeData, _knowledgeRootFiles, query);
+}
+
+function resolveKnowledgePath(currentFilePath, relativeHref) {
+    // currentFilePath: e.g. "concepts/mcp-protocol.md"
+    // relativeHref: e.g. "../entities/openai.md"
+    const parts = currentFilePath.split('/');
+    parts.pop(); // remove filename, keep directory
+    const segments = [...parts, ...relativeHref.split('/')];
+    const resolved = [];
+    for (const seg of segments) {
+        if (seg === '..') resolved.pop();
+        else if (seg !== '.' && seg !== '') resolved.push(seg);
+    }
+    return resolved.join('/');
+}
+
+function bindKnowledgeLinks(container, currentFilePath) {
+    container.querySelectorAll('a').forEach(a => {
+        const href = a.getAttribute('href');
+        if (!href || !href.endsWith('.md')) return;
+        // Skip absolute URLs
+        if (/^https?:\/\//.test(href)) return;
+
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const resolved = resolveKnowledgePath(currentFilePath, href);
+            const linkTitle = a.textContent.trim() || resolved.replace(/\.md$/, '').split('/').pop();
+            openKnowledgeFile(resolved, linkTitle);
+        });
+        a.style.cursor = 'pointer';
+        a.classList.add('text-primary-500', 'hover:underline');
+    });
+}
+
+function bindChatKnowledgeLinks(container) {
+    if (!container) return;
+    container.querySelectorAll('a').forEach(a => {
+        const href = a.getAttribute('href');
+        if (!href || !href.endsWith('.md')) return;
+        if (/^https?:\/\//.test(href)) return;
+
+        // Determine knowledge path
+        let knowledgePath = null;
+        if (href.startsWith('knowledge/')) {
+            // Full path from workspace root: knowledge/concepts/moe.md
+            knowledgePath = href.replace(/^knowledge\//, '');
+        } else if (/^[a-z0-9_-]+\/[a-z0-9_.-]+\.md$/i.test(href)) {
+            // Looks like category/file.md pattern without knowledge/ prefix
+            knowledgePath = href;
+        } else if (href.includes('/') && !href.startsWith('/')) {
+            // Relative path like ../entities/deepseek.md — extract filename and search
+            const filename = href.split('/').pop();
+            knowledgePath = '__search__:' + filename;
+        }
+        if (!knowledgePath) return;
+
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (knowledgePath.startsWith('__search__:')) {
+                const filename = knowledgePath.replace('__search__:', '');
+                // Find the file in cached tree data
+                const found = _findKnowledgeFileByName(filename);
+                if (found) {
+                    navigateTo('knowledge');
+                    setTimeout(() => openKnowledgeFile(found.path, found.title), 100);
+                }
+            } else {
+                navigateTo('knowledge');
+                const linkTitle = a.textContent.trim() || knowledgePath.replace(/\.md$/, '').split('/').pop();
+                setTimeout(() => openKnowledgeFile(knowledgePath, linkTitle), 100);
+            }
+        });
+        a.style.cursor = 'pointer';
+        a.classList.add('text-primary-500', 'hover:underline');
+    });
+}
+
+function _findKnowledgeFileByName(filename) {
+    for (const f of _knowledgeRootFiles) {
+        if (f.name === filename) return { path: f.name, title: f.title };
+    }
+    return _searchFileInGroups(_knowledgeTreeData, '', filename);
+}
+
+function _searchFileInGroups(groups, parentPath, filename) {
+    for (const group of groups) {
+        const groupPath = parentPath ? parentPath + '/' + group.dir : group.dir;
+        for (const f of (group.files || [])) {
+            if (f.name === filename) {
+                return { path: groupPath + '/' + f.name, title: f.title };
+            }
+        }
+        const found = _searchFileInGroups(group.children || [], groupPath, filename);
+        if (found) return found;
+    }
+    return null;
+}
+
+function openKnowledgeFile(path, title) {
+    _knowledgeCurrentFile = path;
+    // Update active state in tree via data-path
+    document.querySelectorAll('.knowledge-tree-file').forEach(el => {
+        el.classList.toggle('active', el.dataset.path === path);
+    });
+
+    // Immediately hide placeholder
+    document.getElementById('knowledge-content-placeholder').classList.add('hidden');
+
+    fetch(`/api/knowledge/read?path=${encodeURIComponent(path)}`).then(r => r.json()).then(data => {
+        if (data.status !== 'success') return;
+        const viewer = document.getElementById('knowledge-content-viewer');
+        document.getElementById('knowledge-viewer-title').textContent = title;
+        document.getElementById('knowledge-viewer-path').textContent = path;
+        const bodyEl = document.getElementById('knowledge-viewer-body');
+        bodyEl.innerHTML = renderMarkdown(data.content || '');
+        viewer.classList.remove('hidden');
+        applyHighlighting(viewer);
+        bindKnowledgeLinks(bodyEl, path);
+
+        // Mobile: hide sidebar, show content
+        if (window.innerWidth < 768) {
+            document.getElementById('knowledge-sidebar').classList.add('hidden');
+        }
+    }).catch(() => {});
+}
+
+function knowledgeMobileBack() {
+    document.getElementById('knowledge-sidebar').classList.remove('hidden');
+    document.getElementById('knowledge-content-viewer').classList.add('hidden');
+}
+
+function switchKnowledgeTab(tab) {
+    document.querySelectorAll('.knowledge-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('knowledge-tab-' + tab).classList.add('active');
+
+    const docsPanel = document.getElementById('knowledge-panel-docs');
+    const graphPanel = document.getElementById('knowledge-panel-graph');
+
+    if (tab === 'docs') {
+        docsPanel.classList.remove('hidden');
+        graphPanel.classList.add('hidden');
+    } else {
+        docsPanel.classList.add('hidden');
+        graphPanel.classList.remove('hidden');
+        if (!_knowledgeGraphLoaded) {
+            loadKnowledgeGraph();
+        }
+    }
+}
+
+function loadKnowledgeGraph() {
+    _knowledgeGraphLoaded = true;
+    const container = document.getElementById('knowledge-graph-container');
+    container.innerHTML = '';
+
+    fetch('/api/knowledge/graph').then(r => r.json()).then(data => {
+        const nodes = data.nodes || [];
+        const links = data.links || [];
+        if (nodes.length === 0) {
+            container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400"><i class="fas fa-diagram-project text-3xl mb-3 opacity-40"></i><p class="text-sm">${t('knowledge_empty_hint')}</p></div>`;
+            return;
+        }
+        renderKnowledgeGraph(container, nodes, links);
+    }).catch(() => {
+        container.innerHTML = '<div class="flex items-center justify-center h-full text-slate-400 text-sm">Failed to load graph</div>';
+    });
+}
+
+function renderKnowledgeGraph(container, nodes, links) {
+    const width = container.clientWidth;
+    const height = container.clientHeight || 600;
+
+    const categories = [...new Set(nodes.map(n => n.category))];
+    const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(categories);
+
+    // Connection count for sizing
+    const connCount = {};
+    nodes.forEach(n => connCount[n.id] = 0);
+    links.forEach(l => {
+        connCount[l.source] = (connCount[l.source] || 0) + 1;
+        connCount[l.target] = (connCount[l.target] || 0) + 1;
+    });
+
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    const g = svg.append('g');
+
+    // Zoom with adaptive label visibility
+    let currentZoomScale = 1;
+    const zoom = d3.zoom()
+        .scaleExtent([0.2, 5])
+        .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+            currentZoomScale = event.transform.k;
+            updateLabelVisibility();
+        });
+    svg.call(zoom);
+
+    function updateLabelVisibility() {
+        if (!label) return;
+        if (currentZoomScale < 0.8) {
+            label.attr('opacity', 0);
+        } else {
+            const baseFontSize = Math.min(12, 10 / Math.max(currentZoomScale * 0.7, 0.5));
+            label.attr('opacity', 1).attr('font-size', baseFontSize);
+        }
+    }
+
+    const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(90))
+        .force('charge', d3.forceManyBody().strength(-180))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('x', d3.forceX(width / 2).strength(0.06))
+        .force('y', d3.forceY(height / 2).strength(0.06))
+        .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 30));
+
+    function getNodeRadius(d) {
+        return Math.max(5, Math.min(16, 5 + (connCount[d.id] || 0) * 2));
+    }
+
+    const link = g.append('g')
+        .selectAll('line')
+        .data(links)
+        .join('line')
+        .attr('stroke', '#94a3b8')
+        .attr('stroke-opacity', 0.3)
+        .attr('stroke-width', 1);
+
+    const node = g.append('g')
+        .selectAll('circle')
+        .data(nodes)
+        .join('circle')
+        .attr('r', d => getNodeRadius(d))
+        .attr('fill', d => colorScale(d.category))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5)
+        .style('cursor', 'pointer')
+        .call(d3.drag()
+            .on('start', (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+            .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+            .on('end', (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
+        );
+
+    const label = g.append('g')
+        .selectAll('text')
+        .data(nodes)
+        .join('text')
+        .text(d => d.label.length > 15 ? d.label.slice(0, 14) + '…' : d.label)
+        .attr('font-size', 9)
+        .attr('dx', d => getNodeRadius(d) + 4)
+        .attr('dy', 3)
+        .attr('fill', '#64748b')
+        .style('pointer-events', 'none');
+
+    // Tooltip
+    const tooltip = document.createElement('div');
+    tooltip.className = 'knowledge-graph-tooltip';
+    container.style.position = 'relative';
+    container.appendChild(tooltip);
+
+    node.on('mouseover', (event, d) => {
+        tooltip.textContent = d.label + ' (' + d.category + ')';
+        tooltip.style.opacity = '1';
+        tooltip.style.left = (event.offsetX + 12) + 'px';
+        tooltip.style.top = (event.offsetY - 8) + 'px';
+        // Highlight connections
+        link.attr('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id) ? 0.8 : 0.1);
+        node.attr('opacity', n => n.id === d.id || links.some(l => (l.source.id === d.id && l.target.id === n.id) || (l.target.id === d.id && l.source.id === n.id)) ? 1 : 0.2);
+        label.attr('opacity', n => n.id === d.id || links.some(l => (l.source.id === d.id && l.target.id === n.id) || (l.target.id === d.id && l.source.id === n.id)) ? 1 : 0.1);
+    }).on('mousemove', (event) => {
+        tooltip.style.left = (event.offsetX + 12) + 'px';
+        tooltip.style.top = (event.offsetY - 8) + 'px';
+    }).on('mouseout', () => {
+        tooltip.style.opacity = '0';
+        link.attr('stroke-opacity', 0.3);
+        node.attr('opacity', 1);
+        label.attr('opacity', 1);
+    }).on('click', (event, d) => {
+        // Switch to docs tab and open the file
+        switchKnowledgeTab('docs');
+        openKnowledgeFile(d.id, d.label);
+    });
+
+    simulation.on('tick', () => {
+        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        node.attr('cx', d => d.x).attr('cy', d => d.y);
+        label.attr('x', d => d.x).attr('y', d => d.y);
+    });
+
+    // Auto fit-to-view when simulation settles
+    simulation.on('end', () => {
+        const pad = 16;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        nodes.forEach(n => {
+            if (n.x < x0) x0 = n.x;
+            if (n.y < y0) y0 = n.y;
+            if (n.x > x1) x1 = n.x;
+            if (n.y > y1) y1 = n.y;
+        });
+        const bw = x1 - x0 + pad * 2;
+        const bh = y1 - y0 + pad * 2;
+        if (bw > 0 && bh > 0) {
+            const scale = Math.min(width / bw, height / bh, 4);
+            const tx = width / 2 - (x0 + x1) / 2 * scale;
+            const ty = height / 2 - (y0 + y1) / 2 * scale;
+            svg.transition().duration(500).call(
+                zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale)
+            );
+        }
+    });
+
+    // Legend
+    const legendDiv = document.createElement('div');
+    legendDiv.className = 'knowledge-graph-legend';
+    categories.forEach(cat => {
+        const item = document.createElement('span');
+        item.className = 'knowledge-graph-legend-item';
+        item.innerHTML = `<span class="knowledge-graph-legend-dot" style="background:${colorScale(cat)}"></span>${escapeHtml(cat)}`;
+        legendDiv.appendChild(item);
+    });
+    container.appendChild(legendDiv);
+}
+
+// =====================================================================
+// Authentication
+// =====================================================================
+function toggleLoginPassword() {
+    const input = document.getElementById('login-password');
+    const icon = document.querySelector('#login-toggle-pwd i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+window.toggleLoginPassword = toggleLoginPassword;
+
+function showLoginScreen() {
+    const overlay = document.getElementById('login-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+
+    const subtitle = document.getElementById('login-subtitle');
+    const loginBtn = document.getElementById('login-btn');
+    if (currentLang === 'en') {
+        subtitle.textContent = 'Enter password to access the console';
+        loginBtn.textContent = 'Login';
+    } else {
+        subtitle.textContent = '请输入密码以访问控制台';
+        loginBtn.textContent = '登录';
+    }
+
+    const form = document.getElementById('login-form');
+    const pwdInput = document.getElementById('login-password');
+    pwdInput.focus();
+
+    form.onsubmit = function(e) {
+        e.preventDefault();
+        const pwd = pwdInput.value;
+        if (!pwd) return;
+        const btn = document.getElementById('login-btn');
+        const errEl = document.getElementById('login-error');
+        btn.disabled = true;
+        errEl.classList.add('hidden');
+
+        fetch('/auth/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password: pwd})
+        }).then(r => r.json()).then(data => {
+            if (data.status === 'success') {
+                overlay.classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                initApp();
+            } else {
+                errEl.textContent = currentLang === 'zh' ? '密码错误' : 'Wrong password';
+                errEl.classList.remove('hidden');
+                pwdInput.value = '';
+                pwdInput.focus();
+            }
+            btn.disabled = false;
+        }).catch(() => {
+            errEl.textContent = currentLang === 'zh' ? '网络错误，请重试' : 'Network error, please retry';
+            errEl.classList.remove('hidden');
+            btn.disabled = false;
+        });
+        return false;
+    };
+}
+
+// Intercept 401 responses globally to show login screen on session expiry
+const _originalFetch = window.fetch;
+window.fetch = function(...args) {
+    return _originalFetch.apply(this, args).then(response => {
+        if (response.status === 401) {
+            const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+            if (!url.startsWith('/auth/')) {
+                showLoginScreen();
+            }
+        }
+        return response;
+    });
+};
+
+function initApp() {
+    applyI18n();
+    _applyInputTooltips();
+    _restoreSessionPanel();
+
+    fetch('/api/knowledge/list').then(r => r.json()).then(data => {
+        if (data.status === 'success') {
+            _knowledgeTreeData = data.tree || [];
+            _knowledgeRootFiles = data.root_files || [];
+        }
+    }).catch(() => {});
+
+    fetch('/api/version').then(r => r.json()).then(data => {
+        APP_VERSION = `v${data.version}`;
+        document.getElementById('sidebar-version').textContent = `CowAgent ${APP_VERSION}`;
+    }).catch(() => {
+        document.getElementById('sidebar-version').textContent = 'CowAgent';
+    });
+    chatInput.focus();
+}
+
+// =====================================================================
 // Initialization
 // =====================================================================
 applyTheme();
 applyI18n();
-fetch('/api/version').then(r => r.json()).then(data => {
-    APP_VERSION = `v${data.version}`;
-    document.getElementById('sidebar-version').textContent = `CowAgent ${APP_VERSION}`;
-}).catch(() => {
-    document.getElementById('sidebar-version').textContent = 'CowAgent';
-});
-chatInput.focus();
 
-// Re-enable color transition AFTER first paint so the theme applied in <head>
-// doesn't produce an animated flash on load.  The class is missing from the
-// body initially; adding it here means transitions only fire on user-triggered
-// theme toggles, not on page load.
+fetch('/auth/check').then(r => r.json()).then(data => {
+    if (data.auth_required && !data.authenticated) {
+        showLoginScreen();
+    } else {
+        initApp();
+    }
+}).catch(() => {
+    initApp();
+});
+
 requestAnimationFrame(() => {
     document.body.classList.add('transition-colors', 'duration-200');
 });

@@ -8,12 +8,12 @@ description: CowAgentの手動デプロイ（ソースコード / Docker）
 ### 1. プロジェクトをクローン
 
 ```bash
-git clone https://github.com/zhayujie/chatgpt-on-wechat
-cd chatgpt-on-wechat/
+git clone https://github.com/zhayujie/CowAgent
+cd CowAgent/
 ```
 
 <Tip>
-  ネットワークに問題がある場合は、ミラーを使用してください: https://gitee.com/zhayujie/chatgpt-on-wechat
+  ネットワークに問題がある場合は、ミラーを使用してください: https://gitee.com/zhayujie/CowAgent
 </Tip>
 
 ### 2. 依存パッケージをインストール
@@ -121,7 +121,8 @@ sudo docker logs -f chatgpt-on-wechat
 ```json
 {
   "channel_type": "web",
-  "model": "MiniMax-M2.5",
+  "model": "deepseek-v4-flash",
+  "deepseek_api_key": "",
   "agent": true,
   "agent_workspace": "~/cow",
   "agent_max_context_tokens": 40000,
@@ -133,7 +134,7 @@ sudo docker logs -f chatgpt-on-wechat
 | パラメータ | 説明 | デフォルト値 |
 | --- | --- | --- |
 | `channel_type` | チャネルタイプ | `web` |
-| `model` | モデル名 | `MiniMax-M2.5` |
+| `model` | モデル名 | `deepseek-v4-flash` |
 | `agent` | Agent モードを有効化 | `true` |
 | `agent_workspace` | Agent のワークスペースパス | `~/cow` |
 | `agent_max_context_tokens` | 最大コンテキストトークン数 | `40000` |
@@ -141,5 +142,5 @@ sudo docker logs -f chatgpt-on-wechat
 | `agent_max_steps` | タスクごとの最大判断ステップ数 | `15` |
 
 <Tip>
-  すべての設定オプションはプロジェクトの [`config.py`](https://github.com/zhayujie/chatgpt-on-wechat/blob/master/config.py) に記載されています。
+  すべての設定オプションはプロジェクトの [`config.py`](https://github.com/zhayujie/CowAgent/blob/master/config.py) に記載されています。
 </Tip>
